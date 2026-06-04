@@ -872,6 +872,163 @@ table.sheet input:focus{
 .ql-only{display:none}
 body.role-ql .ql-only{display:block}
 body.role-ql .ql-only-flex{display:flex}
+
+/* ══ MOBILE RESPONSIVE ══ */
+@media (max-width: 600px) {
+  .wrap{padding:0 0 60px}
+  .page{padding:10px 8px 0}
+
+  /* Meta bar */
+  .meta-bar{grid-template-columns:1fr 1fr;grid-template-rows:auto auto}
+  .meta-bar .meta-card:nth-child(3){grid-column:1}
+  .meta-bar .meta-refresh{grid-column:2;grid-row:2;min-height:44px}
+
+  /* Nav */
+  .nav{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .nav-btn{padding:9px 3px;font-size:9px;min-width:52px}
+
+  /* TABLE HEADER — mobile: hide Sao+ và Số Ngày columns */
+  .tbl-hdr{
+    grid-template-columns:minmax(0,2.5fr) 52px 52px 78px 44px 38px;
+    font-size:9px;padding:7px 8px;
+  }
+  .tbl-hdr span:nth-child(4){display:none} /* Sao+ */
+  .tbl-hdr span:nth-child(7){display:none} /* Số Ngày */
+  .tbl-hdr span:nth-child(8){display:none} /* Trừ Sao */
+
+  /* ROW ITEM — mobile layout */
+  .row-item{
+    grid-template-columns:minmax(0,2.5fr) 52px 52px 78px 44px 38px;
+    padding:7px 8px;
+    gap:1px;
+  }
+  /* Hide Sao+ col, Số Ngày col, Trừ Sao col on mobile (show in expandable) */
+  .row-item > div:nth-child(4){display:none} /* Sao+ */
+  .row-item > div:nth-child(7){display:none} /* Số Ngày */
+  .row-item > div:nth-child(8){display:none} /* Trừ Sao */
+
+  .ri-name{font-size:11px}
+  .ri-sub{font-size:9px}
+  .ri-pct{font-size:12px}
+  .ri-kq input{font-size:13px;padding:4px 2px}
+
+  /* Summary bar */
+  .summary-bar{flex-direction:column;gap:10px;padding:14px}
+  .sb-right{gap:6px;flex-wrap:wrap;justify-content:center}
+  .sb-stat{padding:7px 10px}
+  .sb-stat .n{font-size:18px}
+  .sao-badge{padding:9px 16px}
+  .sao-badge .n{font-size:30px}
+
+  /* Bottom grid */
+  .bottom-grid{grid-template-columns:1fr}
+
+  /* Stat grid */
+  .stat-grid{grid-template-columns:repeat(3,1fr);gap:6px}
+  .stat-c{padding:10px 10px}
+  .stat-c .sv{font-size:20px}
+
+  /* Theme quick bar */
+  #theme-quick-bar{padding:6px 10px}
+
+  /* Header */
+  .hdr{padding:12px 14px}
+  .hdr-title{font-size:14px}
+  .hdr-time{font-size:10px}
+  .role-badge{padding:4px 8px;font-size:10px}
+
+  /* Tong ket */
+  .tong-ket{flex-direction:column;gap:8px;text-align:center}
+  .tk-big{font-size:24px}
+
+  /* Settings */
+  .theme-grid{grid-template-columns:repeat(4,1fr);gap:6px}
+  .color-inputs{grid-template-columns:1fr 1fr}
+
+  /* Chip bar */
+  .chip-bar{padding:8px 10px}
+  .chip-item{font-size:10px;padding:3px 9px}
+
+  /* Sheet table */
+  .tbl-actions{flex-wrap:wrap;gap:5px}
+  .tbl-actions .btn{font-size:11px;padding:8px 12px}
+
+  /* BXH rows */
+  .rank-row{padding:9px 10px;gap:7px}
+
+  /* Bar label */
+  .bar-lbl{width:100px;font-size:10px}
+
+  /* Trend grid */
+  .trend-grid{grid-template-columns:repeat(2,1fr)}
+
+  /* Days info */
+  .days-info{flex-direction:column;gap:4px;padding:7px 10px}
+}
+
+/* ══ QL MANAGE RECORDS MODAL ══ */
+.ql-rec-overlay{
+  position:fixed;inset:0;z-index:7000;
+  background:rgba(0,0,0,.7);backdrop-filter:blur(6px);
+  display:none;align-items:flex-end;justify-content:center;
+}
+.ql-rec-overlay.show{display:flex}
+.ql-rec-sheet{
+  width:100%;max-width:760px;
+  background:var(--bg2);
+  border-radius:20px 20px 0 0;
+  border-top:1px solid var(--bd2);
+  padding:0 0 24px;
+  max-height:90vh;overflow-y:auto;
+}
+.ql-rec-handle{width:40px;height:4px;border-radius:2px;background:var(--bd2);margin:12px auto 0}
+.ql-rec-title{
+  font-size:14px;font-weight:800;color:var(--t1);
+  padding:14px 18px 4px;
+  display:flex;align-items:center;justify-content:space-between;
+}
+.ql-rec-sub{font-size:11px;color:var(--t3);padding:0 18px 12px}
+.ql-rec-list{padding:0 12px}
+.ql-rec-item{
+  background:var(--bg3);border:1px solid var(--bd);
+  border-radius:var(--rad);padding:12px 14px;margin-bottom:8px;
+}
+.ql-rec-row{display:flex;align-items:flex-start;gap:10px}
+.ql-rec-info{flex:1}
+.ql-rec-name{font-size:13px;font-weight:700;color:var(--t1);margin-bottom:3px}
+.ql-rec-meta{font-size:11px;color:var(--t2);margin-bottom:4px}
+.ql-rec-stats{display:flex;gap:8px;flex-wrap:wrap;font-size:11px}
+.ql-rec-actions{display:flex;gap:6px;flex-shrink:0;flex-direction:column;align-items:flex-end}
+.ql-rec-edit-btn{
+  background:var(--p3);color:var(--p);
+  border:1px solid rgba(124,110,245,.25);
+  border-radius:7px;padding:5px 12px;font-size:11px;font-weight:700;
+  cursor:pointer;font-family:inherit;white-space:nowrap;
+}
+.ql-rec-del-btn{
+  background:var(--r2);color:var(--r);
+  border:1px solid rgba(255,77,109,.2);
+  border-radius:7px;padding:5px 12px;font-size:11px;font-weight:700;
+  cursor:pointer;font-family:inherit;white-space:nowrap;
+}
+
+/* QL edit inline form */
+.ql-edit-form{
+  background:var(--bg2);border:1.5px solid var(--p);
+  border-radius:var(--rad);padding:14px;margin-top:10px;
+}
+.ql-edit-grid{
+  display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:10px;
+}
+@media(max-width:480px){.ql-edit-grid{grid-template-columns:1fr}}
+.ql-edit-item{display:flex;flex-direction:column;gap:3px}
+.ql-edit-item label{font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.06em}
+.ql-edit-item input{
+  border:1px solid var(--bd2);border-radius:6px;
+  padding:7px 10px;font-family:inherit;font-size:13px;font-weight:700;
+  background:var(--bg3);color:var(--t1);
+}
+.ql-edit-item input:focus{outline:none;border-color:var(--p);background:var(--p3)}
 </style>
 </head>
 <body>
@@ -903,6 +1060,7 @@ body.role-ql .ql-only-flex{display:flex}
   <button class="nav-btn" onclick="showPage('bxh-sao')">🏆 BXH Sao</button>
   <button class="nav-btn ql-only" onclick="showPage('bxh-thidua')">🎖 Thi đua</button>
   <button class="nav-btn ql-only" onclick="showPage('thuong-tru')">⭐ T/T Sao</button>
+  <button class="nav-btn ql-only" onclick="openQlRecManager()">📋 BC NV</button>
   <button class="nav-btn" onclick="showPage('phan-tich')">📈 Phân tích</button>
   <button class="nav-btn" onclick="showPage('cai-dat')">⚙️ Cài đặt</button>
 </div>
@@ -1200,6 +1358,34 @@ body.role-ql .ql-only-flex{display:flex}
 </div>
 
 </div><!-- /wrap -->
+
+<!-- ══ QL MANAGE RECORDS MODAL ══ -->
+<div class="ql-rec-overlay" id="ql-rec-overlay" onclick="closeQlRecManager(event)">
+  <div class="ql-rec-sheet" id="ql-rec-sheet">
+    <div class="ql-rec-handle"></div>
+    <div class="ql-rec-title">
+      📋 Quản lý báo cáo nhân viên
+      <span style="font-size:11px;font-weight:600;color:var(--t3);cursor:pointer" onclick="document.getElementById('ql-rec-overlay').classList.remove('show')">✕ Đóng</span>
+    </div>
+    <div class="ql-rec-sub">QL có thể chỉnh sửa số kết quả hoặc xóa báo cáo của nhân viên</div>
+    <!-- Filter bar -->
+    <div style="display:flex;gap:7px;padding:0 12px 12px;flex-wrap:wrap;align-items:center">
+      <select id="ql-rec-st" class="tbl-sel" onchange="renderQlRecords()" style="font-size:12px;padding:6px 10px">
+        <option value="">Tất cả ST</option>
+        <option value="TGDĐ">TGDĐ</option>
+        <option value="Topzone">Topzone</option>
+      </select>
+      <select id="ql-rec-nv" class="tbl-sel" onchange="renderQlRecords()" style="font-size:12px;padding:6px 10px">
+        <option value="">Tất cả NV</option>
+      </select>
+      <input type="date" id="ql-rec-from" onchange="renderQlRecords()" style="border:1px solid var(--bd2);border-radius:var(--rad-sm);padding:6px 10px;font-family:inherit;font-size:12px;background:var(--bg2);color:var(--t1)"/>
+      <input type="date" id="ql-rec-to" onchange="renderQlRecords()" style="border:1px solid var(--bd2);border-radius:var(--rad-sm);padding:6px 10px;font-family:inherit;font-size:12px;background:var(--bg2);color:var(--t1)"/>
+    </div>
+    <div class="ql-rec-list" id="ql-rec-list">
+      <p style="color:var(--t3);padding:14px">Đang tải...</p>
+    </div>
+  </div>
+</div>
 
 <!-- ══ TEMPLATE PICKER MODAL ══ -->
 <div class="tmpl-modal-overlay" id="tmpl-overlay" onclick="closeTmplPicker(event)">
@@ -3393,6 +3579,174 @@ async function saveThuongTruToSheets(){
   } else {
     showToast('✅ Đã lưu local (chưa kết nối Sheets)');
   }
+}
+
+/* ═══════════════════════════════
+   QL QUẢN LÝ BÁO CÁO NV
+═══════════════════════════════ */
+let qlEditKey = null; // key đang edit
+
+function openQlRecManager(){
+  if(currentRole !== 'ql'){ showToast('⚠️ Chỉ Quản lý mới dùng được!'); return; }
+  const overlay = document.getElementById('ql-rec-overlay');
+  overlay.classList.add('show');
+  // Set default date range = this month
+  const from = document.getElementById('ql-rec-from');
+  const to = document.getElementById('ql-rec-to');
+  if(!from.value){ const d=new Date(); d.setDate(1); from.value=d.toISOString().slice(0,10); }
+  if(!to.value) to.value = todayStr();
+  populateQlNvFilter();
+  renderQlRecords();
+}
+
+function closeQlRecManager(e){
+  if(e && e.target !== document.getElementById('ql-rec-overlay')) return;
+  document.getElementById('ql-rec-overlay').classList.remove('show');
+  qlEditKey = null;
+}
+
+function populateQlNvFilter(){
+  const st = document.getElementById('ql-rec-st').value;
+  const sel = document.getElementById('ql-rec-nv');
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">Tất cả NV</option>';
+  const stList = st ? [st] : ['TGDĐ','Topzone'];
+  const seen = new Set();
+  stList.forEach(s=>{
+    (CONFIG[s]?.nv||[]).forEach(n=>{
+      if(!seen.has(n.mnv)){
+        seen.add(n.mnv);
+        sel.innerHTML += `<option value="${n.mnv}:${s}"${(n.mnv+':'+s)===cur?' selected':''}>${n.ten} (${s})</option>`;
+      }
+    });
+  });
+}
+
+function renderQlRecords(){
+  populateQlNvFilter();
+  const st = document.getElementById('ql-rec-st').value;
+  const nvVal = document.getElementById('ql-rec-nv').value;
+  const from = document.getElementById('ql-rec-from').value;
+  const to = document.getElementById('ql-rec-to').value;
+
+  let keys = LS.keys('bc:');
+  let records = keys.map(k=>({key:k, data:LS.get(k)})).filter(r=>r.data);
+
+  if(st) records = records.filter(r=>r.data.st===st);
+  if(nvVal){ const [mnv,s]=nvVal.split(':'); records=records.filter(r=>r.data.mnv===mnv&&r.data.st===s); }
+  if(from) records = records.filter(r=>r.data.ngay>=from);
+  if(to) records = records.filter(r=>r.data.ngay<=to);
+  records.sort((a,b)=>b.data.ts-a.data.ts);
+
+  const body = document.getElementById('ql-rec-list');
+  if(!records.length){
+    body.innerHTML=`<p style="color:var(--t3);padding:14px;text-align:center">Không có báo cáo nào trong khoảng này.</p>`;
+    return;
+  }
+
+  let html = `<div style="font-size:11px;color:var(--t3);margin-bottom:8px;padding:0 2px">Tìm thấy <b style="color:var(--t1)">${records.length}</b> báo cáo</div>`;
+  records.forEach(({key, data})=>{
+    const nhs = CONFIG[data.st]?.nh||[];
+    const datCount = nhs.filter(item=>{
+      const ct=getCtNv(data.st,data.mnv,item);
+      const actual=(data.results&&data.results[item.nh])||0;
+      return ct>0 && actual/ct >= (item.pct5||100)/100;
+    }).length;
+    const saoNet = data.sao_net || 0;
+    const isEdit = qlEditKey===key;
+
+    html+=`<div class="ql-rec-item" id="qlrec_${CSS.escape(key)}">
+      <div class="ql-rec-row">
+        <div class="ql-rec-info">
+          <div class="ql-rec-name">👤 ${data.ten} <span class="chip-${data.st==='TGDĐ'?'tgdd':'tz'}" style="font-size:10px">${data.st}</span></div>
+          <div class="ql-rec-meta">📅 ${data.ngay} · Lưu lúc ${new Date(data.ts).toLocaleTimeString('vi-VN',{hour:'2-digit',minute:'2-digit'})}</div>
+          <div class="ql-rec-stats">
+            <span style="color:var(--g)">✅ ${datCount}/${nhs.length} môn đạt</span>
+            <span style="color:var(--a)">★ ${saoNet>=0?'+':''}${saoNet} sao</span>
+            ${data.note?`<span style="color:var(--t3)">📝 Có ghi chú</span>`:''}
+          </div>
+        </div>
+        <div class="ql-rec-actions">
+          <button class="ql-rec-edit-btn" onclick="toggleQlEdit('${key.replace(/'/g,"\\'")}')">✏️ ${isEdit?'Đang sửa':'Sửa'}</button>
+          <button class="ql-rec-del-btn" onclick="qlDeleteRecord('${key.replace(/'/g,"\\'")}')">🗑 Xóa</button>
+        </div>
+      </div>
+      ${isEdit ? renderQlEditForm(key, data) : ''}
+    </div>`;
+  });
+
+  body.innerHTML = html;
+}
+
+function renderQlEditForm(key, data){
+  const nhs = CONFIG[data.st]?.nh||[];
+  let fieldsHtml = nhs.map(item=>{
+    const val = (data.results&&data.results[item.nh])||0;
+    const safeKey = item.nh.replace(/[^a-z0-9]/gi,'_');
+    return `<div class="ql-edit-item">
+      <label>${item.nh.length>22?item.nh.slice(0,20)+'…':item.nh}</label>
+      <input type="number" step="any" min="0" id="qledit_${safeKey}" value="${val}"/>
+    </div>`;
+  }).join('');
+
+  return `<div class="ql-edit-form">
+    <div style="font-size:11px;font-weight:800;color:var(--p);margin-bottom:10px;text-transform:uppercase;letter-spacing:.06em">✏️ Chỉnh sửa kết quả — ${data.ngay}</div>
+    <div class="ql-edit-grid">${fieldsHtml}</div>
+    <div style="margin-bottom:10px">
+      <div class="ql-edit-item">
+        <label>Ghi chú QL</label>
+        <input type="text" id="qledit_note" value="${data.note||''}" placeholder="Lý do chỉnh sửa..."/>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-p" style="font-size:12px;padding:8px 16px" onclick="qlSaveEdit('${key.replace(/'/g,"\\'")}')">💾 Lưu chỉnh sửa</button>
+      <button class="btn btn-s" style="font-size:12px;padding:8px 14px" onclick="toggleQlEdit(null)">✕ Huỷ</button>
+    </div>
+  </div>`;
+}
+
+function toggleQlEdit(key){
+  qlEditKey = (qlEditKey===key) ? null : key;
+  renderQlRecords();
+}
+
+function qlSaveEdit(key){
+  const data = LS.get(key);
+  if(!data){ showToast('❌ Không tìm thấy bản ghi'); return; }
+  const nhs = CONFIG[data.st]?.nh||[];
+  const newResults = {};
+  nhs.forEach(item=>{
+    const safeKey = item.nh.replace(/[^a-z0-9]/gi,'_');
+    const el = document.getElementById('qledit_'+safeKey);
+    newResults[item.nh] = el ? (parseFloat(el.value)||0) : (data.results[item.nh]||0);
+  });
+  const noteEl = document.getElementById('qledit_note');
+  // Tính lại sao
+  const {saoDuong, saoAm, net} = calcSummary(data.st, data.mnv, nhs, newResults);
+  const updatedData = {
+    ...data,
+    results: newResults,
+    sao_duong: saoDuong,
+    sao_am: saoAm,
+    sao_net: net,
+    note: noteEl ? noteEl.value : (data.note||''),
+    ql_edited: true,
+    ql_edited_ts: Date.now()
+  };
+  LS.set(key, updatedData);
+  qlEditKey = null;
+  showToast('✅ Đã cập nhật báo cáo!');
+  renderQlRecords();
+}
+
+function qlDeleteRecord(key){
+  const data = LS.get(key);
+  if(!data){ showToast('❌ Không tìm thấy'); return; }
+  const confirm_msg = `Xóa báo cáo của ${data.ten} ngày ${data.ngay}?`;
+  if(!confirm(confirm_msg)) return;
+  LS.del(key);
+  showToast('🗑 Đã xóa báo cáo!');
+  renderQlRecords();
 }
 
 init();
