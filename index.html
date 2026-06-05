@@ -1105,7 +1105,10 @@ body.role-ql .ql-only-flex{display:flex}
     </div>
     <div class="meta-card">
       <div class="lbl">Sao tích lũy</div>
-      <div class="meta-sao" id="sao-hien-tai">—</div>
+      <div style="display:flex;align-items:center;gap:6px">
+        <div class="meta-sao" id="sao-hien-tai">—</div>
+        <button onclick="manualRefreshSao()" title="Làm mới từ Sheets" style="background:none;border:none;cursor:pointer;font-size:16px;padding:2px;color:var(--t3);transition:transform .3s" id="sao-refresh-btn">🔄</button>
+      </div>
     </div>
     <button class="meta-refresh" onclick="onSelNv()" title="Tải lại">🔄</button>
   </div>
@@ -3677,9 +3680,70 @@ function init(){
   tick(); setInterval(tick,30000);
   if(API_URL) setSyncStatus('idle','Đã cấu hình — nhấn 🔄 để kiểm tra');
   checkAutoLogin();
-  // NAV: NV chỉ thấy 3 tabs
   rebuildNav();
+  // Polling sao tích lũy mỗi 60 giây — đảm bảo NV luôn nhận sao QL cập nhật
+  setInterval(autoSyncSaoTichLuy, 60000);
 }
+
+// Tự động fetch sao tích lũy từ Sheets cho NV đang xem báo cáo
+async function autoSyncSaoTichLuy(){
+  if(!API_URL) return;
+  const st  = document.getElementById('sel-st')?.value;
+  const mnv = document.getElementById('sel-nv')?.value;
+  const ngay= document.getElementById('sel-ngay')?.value;
+  if(!st || !mnv || !ngay) return;
+  // Fetch và cập nhật UI nếu có thay đổi
+  try{
+    const r = await callAPIPost('getSaoTichLuy', { st, mnv });
+    if(r && r.ok && typeof r.sao === 'number'){
+      const stlData = getStlData();
+      if(!stlData[st]) stlData[st]={};
+      const oldSao = stlData[st][mnv]?.sao ?? null;
+      if(oldSao !== r.sao){
+        // Có thay đổi → cập nhật cache và refresh UI
+        stlData[st][mnv] = { sao: r.sao, updatedAt: new Date().toLocaleString('vi-VN'), updatedBy: 'Sheets sync' };
+        LS.set(STL_KEY, stlData);
+        loadSaoDangCo(st, mnv, ngay);
+        // Cập nhật input sao tích lũy trong form
+        const overrideInp = document.getElementById('sao-override-inp');
+        if(overrideInp){
+          const saoCu = getPrevDaySao(st, mnv, ngay);
+          overrideInp.value = saoCu;
+          onInputChange();
+        }
+        if(oldSao !== null){
+          showToast(`🔄 Sao tích lũy vừa được QL cập nhật: ${r.sao}⭐`, 3500);
+        }
+      }
+    }
+  }catch(e){ /* silent */ }
+}
+// Nút refresh thủ công cho NV — spin animation + fetch ngay
+async function manualRefreshSao(){
+  const btn = document.getElementById('sao-refresh-btn');
+  if(btn){ btn.style.transform='rotate(360deg)'; btn.style.transition='transform .6s'; setTimeout(()=>{ btn.style.transform=''; btn.style.transition='transform .3s'; },700); }
+  const st  = document.getElementById('sel-st')?.value;
+  const mnv = document.getElementById('sel-nv')?.value;
+  const ngay= document.getElementById('sel-ngay')?.value;
+  if(!st||!mnv||!ngay){ showToast('⚠️ Chọn nhân viên trước'); return; }
+  if(!API_URL){ showToast('⚠️ Chưa kết nối Sheets'); return; }
+  try{
+    const r = await callAPIPost('getSaoTichLuy', { st, mnv });
+    if(r && r.ok && typeof r.sao === 'number'){
+      const stlData = getStlData();
+      if(!stlData[st]) stlData[st]={};
+      stlData[st][mnv] = { sao: r.sao, updatedAt: new Date().toLocaleString('vi-VN'), updatedBy: 'Sheets sync' };
+      LS.set(STL_KEY, stlData);
+      loadSaoDangCo(st, mnv, ngay);
+      const overrideInp = document.getElementById('sao-override-inp');
+      if(overrideInp){ overrideInp.value = getPrevDaySao(st, mnv, ngay); onInputChange(); }
+      showToast(`✅ Sao tích lũy: ${r.sao}⭐ (vừa đồng bộ từ Sheets)`);
+    } else {
+      showToast('⚠️ Không lấy được sao từ Sheets');
+    }
+  }catch(e){ showToast('❌ Lỗi kết nối: '+e.message); }
+}
+
 /* ═══════════════════════════════
    BXH SAO
 ═══════════════════════════════ */
