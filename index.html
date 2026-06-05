@@ -2498,6 +2498,7 @@ function rowHtml(item, ct_nv, actual, pct, trong, savedSoNgay, savedDungSao, sao
   if(isOver100){
     truSaoHtml = `<div style="text-align:center;font-size:18px;color:var(--t3);opacity:.3">⭐</div>`;
   } else {
+    // saoCuHienTai đã được tính là sao còn lại sau khi trừ các môn khác đang active
     const canTru = saoCuHienTai >= item.tru;
     if(dungSaoActive){
       // Active: icon vàng sáng, hiện số sao, nhấn để tắt + reset số ngày
@@ -2569,13 +2570,22 @@ function renderBaoCao(st, nv, mnv, ngay, saved, note, checklist, saoOverride, sa
   // saoDat = số môn đạt >= pct5 (100%) — tính trực tiếp, không qua calcSummary
   const saoDatReal = complete.length;
 
+  // Helper: tính sao còn lại cho 1 môn cụ thể (trừ đi các môn KHÁC đang active)
+  function getSaoConLaiForItem(iid){
+    const saoAmKhac = CONFIG[st].nh.reduce((sum,n)=>{
+      const niid = 'inp_'+n.nh.replace(/[^a-z0-9]/gi,'_');
+      return (niid !== iid && dungSaoState[niid]) ? sum + n.tru : sum;
+    }, 0);
+    return saoCu - saoAmKhac;
+  }
+
   // Render incomplete — KHÔNG có section header
   incomplete.forEach(({item,ct_nv,actual,pct,trong})=>{
     const iid='inp_'+item.nh.replace(/[^a-z0-9]/gi,'_');
     const snValRaw = savedSoNgay?.[item.nh];
     const snVal = typeof snValRaw === 'number' ? snValRaw : undefined;
     const canhBao = getCanhBaoNgay(st,mnv,ngay,item);
-    html+=rowHtml(item,ct_nv,actual,pct,trong,snVal,dungSaoState[iid],saoCu,canhBao);
+    html+=rowHtml(item,ct_nv,actual,pct,trong,snVal,dungSaoState[iid],getSaoConLaiForItem(iid),canhBao);
   });
 
   // Render complete — chỉ show header khi có môn hoàn thành
@@ -2585,7 +2595,7 @@ function renderBaoCao(st, nv, mnv, ngay, saved, note, checklist, saoOverride, sa
       const iid='inp_'+item.nh.replace(/[^a-z0-9]/gi,'_');
       const snValRaw = savedSoNgay?.[item.nh];
       const snVal = typeof snValRaw === 'number' ? snValRaw : undefined;
-      html+=rowHtml(item,ct_nv,actual,pct,trong,snVal,dungSaoState[iid],saoCu,false);
+      html+=rowHtml(item,ct_nv,actual,pct,trong,snVal,dungSaoState[iid],getSaoConLaiForItem(iid),false);
     });
   }
 
@@ -2779,10 +2789,17 @@ async function saveBC(){
   }).catch(()=>{
     setSyncStatus('err','⚠️ Lưu local OK, Sheets chưa kết nối');
   });
-  showToast('✅ Đã lưu thành công!');
+  showToast('✅ Đã lưu thành công! Đang tạo ảnh...');
   loadSaoDangCo(st,mnv,ngay);
   const s=document.getElementById('bc-status');
   if(s) s.textContent=`Lưu lúc ${new Date().toTimeString().slice(0,8)}`;
+  // [MỚI] Tự động xuất ảnh sau khi lưu
+  setTimeout(()=>{
+    try{
+      drawCanvas(st,nv,mnv,ngay,CONFIG[st].nh,results, true);
+      showToast('📷 Đã lưu & xuất ảnh tự động!', 3000);
+    }catch(e){ console.warn('Auto export img error:', e); }
+  }, 400);
 }
 
 function clearInputs(){
@@ -3478,101 +3495,239 @@ function exportImg(){
   drawCanvas(st,nv,mnv,ngay,CONFIG[st].nh,results);
 }
 
-function drawCanvas(st,nv,mnv,ngay,nhs,results){
-  // Kiểm tra có môn nào Số Ngày >= 4 không
+function drawCanvas(st,nv,mnv,ngay,nhs,results, autoSave=false){
+  // ── Kiểm tra có môn nào Số Ngày >= 4 không ──
   const soNgayMap = getCurrentSoNgay(st);
   const hasAlertNgay = nhs.some(item => {
     const ct_nv = getCtNv(st,mnv,item);
     const actual = results[item.nh]||0;
     const pct = ct_nv>0 ? actual/ct_nv : 0;
-    const isOver = pct >= (item.pct5||100)/100;
-    if(isOver) return false;
+    if(pct >= (item.pct5||100)/100) return false;
     const sn = soNgayMap[item.nh];
     return typeof sn === 'number' && sn >= 4;
   });
 
-  const ALERT_H = hasAlertNgay ? 56 : 0;
-  const W=680,ROW=34,HDR=72,META=52,CH=30,FOOT=76;
-  const H=HDR+META+CH+nhs.length*ROW+FOOT+ALERT_H;
+  // ── [MỚI] Sắp xếp môn theo % Đạt giảm dần ──
+  const nhsSorted = [...nhs].map(item=>{
+    const ct_nv = getCtNv(st,mnv,item);
+    const actual = results[item.nh]||0;
+    const pct = ct_nv>0 ? actual/ct_nv : 0;
+    return {item, ct_nv, actual, pct};
+  }).sort((a,b)=>b.pct-a.pct);
+
+  // ── [MỚI] Tính lịch sử sao (tháng này) ──
+  const today = new Date(ngay);
+  const monthFrom = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().slice(0,10);
+  const allRecs = [];
+  LS.keys('bc:').forEach(k=>{
+    const d = LS.get(k);
+    if(d && d.st===st && d.mnv===mnv && d.ngay>=monthFrom && d.ngay<=ngay) allRecs.push(d);
+  });
+  allRecs.sort((a,b)=>a.ngay.localeCompare(b.ngay));
+  const totalDaysRec = allRecs.length;
+  const totalSaoMonth = allRecs.reduce((s,r)=>s+(r.sao_net||0),0);
+  const totalDungSaoMonth = allRecs.reduce((s,r)=>s+(r.sao_am||0),0);
+  const bestDay = allRecs.length ? allRecs.reduce((best,r)=>(r.sao_net||0)>(best.sao_net||0)?r:best, allRecs[0]) : null;
+
+  // ── [MỚI] Sao tích lũy ──
+  const saoCu = getSaoCuFromUI();
+  const {saoDat,saoDuong,saoAm,net}=calcSummary(st,mnv,nhs,results);
+  const tongSao = saoCu + net;
+
+  const ALERT_H = hasAlertNgay ? 60 : 0;
+  const HIST_H = 94; // section lịch sử sao
+  const W=720, ROW=34, HDR=78, META=68, CH=32, FOOT=90;
+  const H = HDR + META + CH + nhsSorted.length*ROW + FOOT + HIST_H + ALERT_H;
   const cv=document.getElementById('exp-canvas');
   cv.width=W; cv.height=H;
   const c=cv.getContext('2d');
-  c.fillStyle='#f1f5f9'; c.fillRect(0,0,W,H);
-  const g=c.createLinearGradient(0,0,W,HDR);
+
   const rootStyle=getComputedStyle(document.documentElement);
   const hf=rootStyle.getPropertyValue('--hdr-from').trim()||'#5c4fd6';
   const ht=rootStyle.getPropertyValue('--hdr-to').trim()||'#4538b8';
-  g.addColorStop(0,hf); g.addColorStop(1,ht);
-  c.fillStyle=g; c.fillRect(0,0,W,HDR);
-  c.fillStyle='#fff'; c.font='bold 20px sans-serif'; c.fillText('BÁO CÁO KẾT QUẢ',16,34);
-  c.fillStyle='rgba(255,255,255,.6)'; c.font='11px sans-serif';
-  c.fillText(`${st.toUpperCase()} — ${new Date().toLocaleDateString('vi-VN')}`,16,52);
-  c.textAlign='right'; c.fillStyle='rgba(255,255,255,.8)';
-  c.fillText(new Date().toTimeString().slice(0,5),W-16,34);
-  c.textAlign='left';
+
+  // ── NỀN TỔNG ──
+  c.fillStyle='#f1f5f9'; c.fillRect(0,0,W,H);
+
+  // ── HEADER ──
+  const gHdr=c.createLinearGradient(0,0,W,HDR);
+  gHdr.addColorStop(0,hf); gHdr.addColorStop(1,ht);
+  c.fillStyle=gHdr; c.fillRect(0,0,W,HDR);
+  // Stripe deco
+  c.fillStyle='rgba(255,255,255,.04)';
+  for(let i=0;i<W;i+=22){ c.fillRect(i,0,11,HDR); }
+  c.fillStyle='#fff'; c.font='bold 22px sans-serif'; c.fillText('BÁO CÁO KẾT QUẢ NGÀY',16,36);
+  c.fillStyle='rgba(255,255,255,.65)'; c.font='12px sans-serif';
+  c.fillText(`${st.toUpperCase()} · ${ngay} · Xuất lúc ${new Date().toTimeString().slice(0,5)}`,16,56);
+  // Watermark right
+  c.textAlign='right'; c.fillStyle='rgba(255,255,255,.3)'; c.font='bold 40px sans-serif';
+  c.fillText('⭐',W-16,64); c.textAlign='left';
+
+  // ── META BAR (nền trắng) ──
   c.fillStyle='#fff'; c.fillRect(0,HDR,W,META);
-  c.fillStyle='#aaa'; c.font='9px sans-serif'; c.fillText('SIÊU THỊ',16,HDR+16);
-  c.fillStyle='#111'; c.font='bold 16px sans-serif'; c.fillText(st,16,HDR+38);
-  c.fillStyle='#aaa'; c.font='9px sans-serif'; c.fillText('NHÂN VIÊN',180,HDR+16);
-  c.fillStyle='#111'; c.font='bold 16px sans-serif'; c.fillText(nv.ten,180,HDR+38);
-  const {saoDat,saoDuong,saoAm,net}=calcSummary(st,mnv,nhs,results);
-  c.fillStyle='#aaa'; c.font='9px sans-serif'; c.fillText('SAO HÔM NAY',530,HDR+16);
-  c.fillStyle='#f59e0b'; c.font='bold 26px sans-serif'; c.fillText(net,530,HDR+42);
-  const y0=HDR+META;
-  c.fillStyle=hf; c.fillRect(0,y0,W,CH);
-  c.fillStyle='#fff'; c.font='bold 10px sans-serif';
-  [['MÔN THI ĐUA',14],['CT NGÀY',240],['%ĐẠT',298],['SAO+',356],['KẾT QUẢ',412],['TRỐNG',490],['DÙNG SAO',550]].forEach(([h,x])=>c.fillText(h,x,y0+20));
-  nhs.forEach((item,i)=>{
-    const y=y0+CH+i*ROW;
-    c.fillStyle=i%2===0?'#f8fafc':'#fff'; c.fillRect(0,y,W,ROW);
-    const ct_nv=getCtNv(st,mnv,item);
-    const actual=results[item.nh]||0;
-    const pct=ct_nv>0?actual/ct_nv:0;
-    c.fillStyle='#0f172a'; c.font='bold 12px sans-serif';
-    c.fillText(item.nh.length>25?item.nh.slice(0,23)+'…':item.nh,14,y+21);
-    c.fillStyle='#94a3b8'; c.font='10px sans-serif'; c.fillText(fmt(ct_nv),240,y+22);
-    c.fillStyle=pct>=2?'#3b82f6':pct>=1?'#22c55e':'#ef4444'; c.font='bold 14px sans-serif'; c.fillText((pct*100).toFixed(0)+'%',298,y+23);
-    let sp=''; if(pct>=2) sp='+20⭐'; else if(pct>=1.2) sp='+10⭐'; else if(pct>=1) sp='+5⭐';
-    c.fillStyle=pct>=1?'#22c55e':'#94a3b8'; c.font='bold 11px sans-serif'; c.fillText(sp||'—',356,y+22);
-    c.fillStyle=actual>0?'#111':'#bbb'; c.font=actual>0?'bold 15px sans-serif':'12px sans-serif';
-    c.fillText(actual>0?fmt(actual):'—',412,y+23);
-    const trong=pct<1?getTrongCount(st,mnv,ngay,item):0;
-    c.fillStyle=pct<1?'#ef4444':'#22c55e'; c.font='bold 11px sans-serif'; c.fillText(pct<1?trong+' ngày':'✓',490,y+22);
-    c.fillStyle=pct<1?'#ef4444':hf; c.font='bold 11px sans-serif'; c.fillText(pct<1?`-${item.tru}⭐`:sp||'+5⭐',550,y+22);
-  });
-  const fy=y0+CH+nhs.length*ROW;
-  const gf=c.createLinearGradient(0,fy,W,fy+FOOT); gf.addColorStop(0,hf); gf.addColorStop(1,ht);
-  c.fillStyle=gf; c.fillRect(0,fy,W,FOOT);
-  c.fillStyle='#fff'; c.font='italic bold 32px sans-serif'; c.fillText(`ĐẠT ${saoDat}`,16,fy+44);
-  c.fillStyle='rgba(255,255,255,.65)'; c.font='12px sans-serif'; c.fillText(`/ ${nhs.length} ngành`,120,fy+44);
-  c.fillStyle='rgba(255,255,255,.8)'; c.font='bold 13px sans-serif';
-  c.fillText(`+${saoDuong} thưởng`,320,fy+32); c.fillStyle='#fca5a5'; c.fillText(`-${saoAm} trừ`,320,fy+54);
+  // divider line bottom
+  c.fillStyle='#e2e8f0'; c.fillRect(0,HDR+META-1,W,1);
+
+  // Siêu thị
+  c.fillStyle='#94a3b8'; c.font='9px sans-serif'; c.fillText('SIÊU THỊ',16,HDR+17);
+  c.fillStyle='#0f172a'; c.font='bold 15px sans-serif'; c.fillText(st,16,HDR+36);
+  // Nhân viên
+  c.fillStyle='#94a3b8'; c.font='9px sans-serif'; c.fillText('NHÂN VIÊN',16,HDR+50);
+  c.fillStyle='#0f172a'; c.font='bold 14px sans-serif'; c.fillText(nv.ten,16,HDR+66);
+
+  // Ngày báo cáo
+  c.fillStyle='#94a3b8'; c.font='9px sans-serif'; c.fillText('NGÀY BÁO CÁO',230,HDR+17);
+  c.fillStyle='#0f172a'; c.font='bold 14px sans-serif'; c.fillText(ngay,230,HDR+36);
+
+  // [MỚI] Sao tích lũy (trước khi tính hôm nay)
+  c.fillStyle='#94a3b8'; c.font='9px sans-serif'; c.fillText('SAO TÍCH LŨY TRƯỚC',230,HDR+50);
+  c.fillStyle='#f59e0b'; c.font='bold 14px sans-serif'; c.fillText(`★ ${saoCu}`,230,HDR+66);
+
+  // Sao hôm nay
+  c.fillStyle='#94a3b8'; c.font='9px sans-serif'; c.fillText('SAO HÔM NAY',430,HDR+17);
+  c.fillStyle= net>=0 ? '#22c55e' : '#ef4444'; c.font='bold 28px sans-serif';
+  c.fillText(`${net>=0?'+':''}${net}`,430,HDR+50);
+
+  // [MỚI] Tổng sao sau hôm nay (box vàng nổi bật)
+  const tbx=W-140, tby=HDR+8, tbw=128, tbh=META-16, tbr=10;
   c.fillStyle='#f59e0b';
-  const bx=W-120,by=fy+8,bw=104,bh=FOOT-16,br=8;
-  c.beginPath(); c.moveTo(bx+br,by); c.lineTo(bx+bw-br,by); c.quadraticCurveTo(bx+bw,by,bx+bw,by+br);
-  c.lineTo(bx+bw,by+bh-br); c.quadraticCurveTo(bx+bw,by+bh,bx+bw-br,by+bh);
-  c.lineTo(bx+br,by+bh); c.quadraticCurveTo(bx,by+bh,bx,by+bh-br);
-  c.lineTo(bx,by+br); c.quadraticCurveTo(bx,by,bx+br,by); c.closePath(); c.fill();
-  c.fillStyle='#fff'; c.font='bold 36px sans-serif'; c.textAlign='right';
-  c.fillText(loadSaoDangCo(st,mnv,ngay)+net,W-14,fy+60);
+  c.beginPath(); c.moveTo(tbx+tbr,tby); c.lineTo(tbx+tbw-tbr,tby);
+  c.quadraticCurveTo(tbx+tbw,tby,tbx+tbw,tby+tbr);
+  c.lineTo(tbx+tbw,tby+tbh-tbr); c.quadraticCurveTo(tbx+tbw,tby+tbh,tbx+tbw-tbr,tby+tbh);
+  c.lineTo(tbx+tbr,tby+tbh); c.quadraticCurveTo(tbx,tby+tbh,tbx,tby+tbh-tbr);
+  c.lineTo(tbx,tby+tbr); c.quadraticCurveTo(tbx,tby,tbx+tbr,tby); c.closePath(); c.fill();
+  c.fillStyle='rgba(0,0,0,.15)'; c.font='10px sans-serif'; c.textAlign='center';
+  c.fillText('TỔNG SAO SAU HÔM NAY',tbx+tbw/2,tby+17);
+  c.fillStyle='#fff'; c.font='bold 34px sans-serif';
+  c.fillText(`★ ${tongSao}`,tbx+tbw/2,tby+tbh-10);
   c.textAlign='left';
 
-  // ALERT: Số Ngày >= 4 → thông báo tag quản lý
+  // ── HEADER BẢNG ──
+  const y0=HDR+META;
+  const gCh=c.createLinearGradient(0,y0,W,y0+CH);
+  gCh.addColorStop(0,hf); gCh.addColorStop(1,ht);
+  c.fillStyle=gCh; c.fillRect(0,y0,W,CH);
+  c.fillStyle='#fff'; c.font='bold 10px sans-serif';
+  [['#',14],['MÔN THI ĐUA (% GIẢM DẦN)',38],['CT/NGÀY',300],['% ĐẠT',362],['SAO+',424],['KQ',480],['TRỐNG',540],['DÙNG SAO',590]].forEach(([h,x])=>c.fillText(h,x,y0+21));
+
+  // ── CÁC HÀNG — sắp xếp % giảm dần ──
+  nhsSorted.forEach(({item, ct_nv, actual, pct},i)=>{
+    const y=y0+CH+i*ROW;
+    const isOver = pct>=(item.pct5||100)/100;
+    c.fillStyle=isOver?(i%2===0?'#f0fdf4':'#dcfce7'):(i%2===0?'#f8fafc':'#fff');
+    c.fillRect(0,y,W,ROW);
+    // Số thứ tự
+    c.fillStyle='#94a3b8'; c.font='9px sans-serif'; c.fillText(i+1,16,y+21);
+    // Tên môn
+    c.fillStyle='#0f172a'; c.font='bold 11px sans-serif';
+    c.fillText(item.nh.length>27?item.nh.slice(0,25)+'…':item.nh,38,y+21);
+    // CT ngày
+    c.fillStyle='#64748b'; c.font='10px sans-serif'; c.fillText(fmt(ct_nv),300,y+21);
+    // % Đạt — màu nổi bật
+    const pctColor = pct>=2?'#3b82f6':pct>=1?'#16a34a':pct>=0.5?'#d97706':'#ef4444';
+    c.fillStyle=pctColor; c.font='bold 14px sans-serif';
+    c.fillText((pct*100).toFixed(0)+'%',362,y+22);
+    // Sao+
+    let sp=''; if(pct>=2) sp='+20⭐'; else if(pct>=(item.pct10||120)/100) sp='+10⭐'; else if(pct>=(item.pct5||100)/100) sp='+5⭐';
+    c.fillStyle=pct>=1?'#16a34a':'#94a3b8'; c.font='bold 10px sans-serif';
+    c.fillText(sp||'—',424,y+21);
+    // Kết quả
+    c.fillStyle=actual>0?'#111':'#bbb'; c.font=actual>0?'bold 13px sans-serif':'11px sans-serif';
+    c.fillText(actual>0?fmt(actual):'—',480,y+22);
+    // Trống
+    const trong=!isOver?getTrongCount(st,mnv,ngay,item):0;
+    c.fillStyle=!isOver?'#ef4444':'#16a34a'; c.font='bold 10px sans-serif';
+    c.fillText(isOver?'✓':trong+' ng',540,y+21);
+    // Dùng sao
+    c.fillStyle=!isOver?'#ef4444':'#94a3b8'; c.font='bold 10px sans-serif';
+    c.fillText(!isOver?`-${item.tru}⭐`:sp||'+5⭐',590,y+22);
+    // Separator
+    c.fillStyle='#e2e8f0'; c.fillRect(0,y+ROW-1,W,1);
+  });
+
+  // ── FOOTER TỔNG KẾT ──
+  const fy=y0+CH+nhsSorted.length*ROW;
+  const gFoot=c.createLinearGradient(0,fy,W,fy+FOOT);
+  gFoot.addColorStop(0,hf); gFoot.addColorStop(1,ht);
+  c.fillStyle=gFoot; c.fillRect(0,fy,W,FOOT);
+  // Số môn đạt
+  c.fillStyle='#fff'; c.font='italic bold 36px sans-serif';
+  c.fillText(`ĐẠT ${saoDat}`,16,fy+50);
+  c.fillStyle='rgba(255,255,255,.65)'; c.font='13px sans-serif';
+  c.fillText(`/ ${nhsSorted.length} ngành`,154,fy+50);
+  // Thưởng / Trừ
+  c.fillStyle='rgba(255,255,255,.9)'; c.font='bold 14px sans-serif';
+  c.fillText(`+${saoDuong} thưởng`,16,fy+76);
+  c.fillStyle='#fca5a5'; c.font='bold 14px sans-serif';
+  c.fillText(`-${saoAm} trừ`,160,fy+76);
+  // Box tổng sao (trùng với meta nhưng trong footer nổi bật hơn)
+  c.fillStyle='rgba(255,255,255,.18)';
+  const fb2x=W-240, fb2y=fy+10, fb2w=220, fb2h=FOOT-20, fb2r=8;
+  c.beginPath(); c.moveTo(fb2x+fb2r,fb2y); c.lineTo(fb2x+fb2w-fb2r,fb2y);
+  c.quadraticCurveTo(fb2x+fb2w,fb2y,fb2x+fb2w,fb2y+fb2r);
+  c.lineTo(fb2x+fb2w,fb2y+fb2h-fb2r); c.quadraticCurveTo(fb2x+fb2w,fb2y+fb2h,fb2x+fb2w-fb2r,fb2y+fb2h);
+  c.lineTo(fb2x+fb2r,fb2y+fb2h); c.quadraticCurveTo(fb2x,fb2y+fb2h,fb2x,fb2y+fb2h-fb2r);
+  c.lineTo(fb2x,fb2y+fb2r); c.quadraticCurveTo(fb2x,fb2y,fb2x+fb2r,fb2y); c.closePath(); c.fill();
+  c.fillStyle='rgba(255,255,255,.7)'; c.font='10px sans-serif'; c.textAlign='center';
+  c.fillText('TỔNG SAO SAU HÔM NAY',fb2x+fb2w/2,fb2y+18);
+  c.fillStyle='#f59e0b'; c.font='bold 40px sans-serif';
+  c.fillText(`★ ${tongSao}`,fb2x+fb2w/2,fb2y+fb2h-8);
+  c.textAlign='left';
+
+  // ── [MỚI] SECTION: TÓM TẮT LỊCH SỬ SAO THÁNG ──
+  const hy = fy + FOOT;
+  c.fillStyle='#1e293b'; c.fillRect(0,hy,W,HIST_H);
+  // Tiêu đề
+  c.fillStyle='rgba(255,255,255,.5)'; c.font='9px sans-serif';
+  c.fillText('TÓM TẮT LỊCH SỬ SAO — THÁNG NÀY',14,hy+16);
+  // 4 chỉ số
+  const histItems=[
+    {l:'Ngày đã báo cáo', v:`${totalDaysRec} ngày`, col:'#94a3b8'},
+    {l:'Tổng sao kiếm tháng', v:`+${totalSaoMonth}⭐`, col:'#f59e0b'},
+    {l:'Tổng sao bị trừ tháng', v:`-${totalDungSaoMonth}⭐`, col:'#f87171'},
+    {l:'Ngày xuất sắc nhất', v:bestDay?`${bestDay.ngay.slice(5)} (+${bestDay.sao_net})`:'-', col:'#4ade80'},
+  ];
+  const hcW = Math.floor((W-28)/4);
+  histItems.forEach((item,i)=>{
+    const hx = 14 + i*hcW;
+    c.fillStyle='rgba(255,255,255,.06)';
+    c.fillRect(hx, hy+24, hcW-6, HIST_H-32);
+    c.fillStyle='rgba(255,255,255,.4)'; c.font='9px sans-serif';
+    c.fillText(item.l, hx+6, hy+38);
+    c.fillStyle=item.col; c.font='bold 18px sans-serif';
+    c.fillText(item.v, hx+6, hy+70);
+  });
+
+  // ── ALERT: Số Ngày >= 4 ──
   if(hasAlertNgay){
-    const ay = fy + FOOT;
+    const ay = hy + HIST_H;
     c.fillStyle='#ef4444'; c.fillRect(0,ay,W,ALERT_H);
     c.fillStyle='#fff'; c.font='bold 13px sans-serif';
-    c.fillText('⚠️  Tag tên Quản lý báo cáo hành động đã làm trong ngày hôm nay trước 22h30',14,ay+22);
+    c.fillText('⚠️  Tag tên Quản lý — Báo cáo hành động đã làm trong ngày hôm nay trước 22h30',14,ay+24);
     c.fillStyle='rgba(255,255,255,.75)'; c.font='11px sans-serif';
-    c.fillText(`${nv.ten} — ${ngay}`,14,ay+42);
+    c.fillText(`${nv.ten} — ${ngay}`,14,ay+46);
   }
 
+  // ── XUẤT ──
   const img=document.getElementById('exp-img');
   const url=cv.toDataURL('image/png');
   img.src=url; img.style.display='block';
-  const a=document.createElement('a'); a.href=url;
-  a.download=`BaoCao_${st}_${nv.ten.replace(/ /g,'_')}_${ngay}.png`; a.click();
-  showToast('📷 Đã xuất ảnh!');
+
+  if(!autoSave){
+    const a=document.createElement('a'); a.href=url;
+    a.download=`BaoCao_${st}_${nv.ten.replace(/ /g,'_')}_${ngay}.png`; a.click();
+    showToast('📷 Đã xuất ảnh!');
+  } else {
+    // Auto-save: tạo link nhưng không click ngay (để tránh popup blocker)
+    // Lưu URL vào data attr của button để user có thể tải lại
+    const btn = document.querySelector('.btn-g[onclick="exportImg()"]');
+    if(btn){
+      btn._lastImgUrl = url;
+      btn._lastImgName = `BaoCao_${st}_${nv.ten.replace(/ /g,'_')}_${ngay}.png`;
+    }
+    const a=document.createElement('a'); a.href=url;
+    a.download=`BaoCao_${st}_${nv.ten.replace(/ /g,'_')}_${ngay}.png`; a.click();
+  }
 }
 
 /* ═══════════════════════════════
