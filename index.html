@@ -485,7 +485,7 @@ a{color:var(--p);text-decoration:none}
 
 /* ══ TABLE HEADER ══ */
 .tbl-hdr{
-  display:grid;grid-template-columns:minmax(0,2fr) 54px 58px 46px 82px 50px 68px 34px;
+  display:grid;grid-template-columns:minmax(0,1fr) 54px 58px 46px 82px 56px 42px;
   gap:2px;padding:8px 11px;
   background:linear-gradient(135deg,var(--p),var(--p2));
   border-radius:var(--rad-sm);margin-bottom:4px;
@@ -495,7 +495,7 @@ a{color:var(--p);text-decoration:none}
 
 /* ══ ROW ITEM ══ */
 .row-item{
-  display:grid;grid-template-columns:minmax(0,2fr) 54px 58px 46px 82px 50px 68px 34px;
+  display:grid;grid-template-columns:minmax(0,1fr) 54px 58px 46px 82px 56px 42px;
   gap:2px;align-items:center;padding:8px 11px;
   border-radius:var(--rad-sm);margin-bottom:2px;
   border:1px solid var(--bd);background:var(--bg2);
@@ -887,25 +887,21 @@ body.role-ql .ql-only-flex{display:flex}
   .nav{overflow-x:auto;-webkit-overflow-scrolling:touch}
   .nav-btn{padding:9px 3px;font-size:9px;min-width:52px}
 
-  /* TABLE HEADER — mobile: hide Sao+ và Số Ngày columns */
+  /* TABLE HEADER — mobile */
   .tbl-hdr{
-    grid-template-columns:minmax(0,2.5fr) 52px 52px 78px 44px 38px;
+    grid-template-columns:minmax(0,1fr) 50px 50px 52px 44px 42px;
     font-size:9px;padding:7px 8px;
   }
   .tbl-hdr span:nth-child(4){display:none} /* Sao+ */
-  .tbl-hdr span:nth-child(7){display:none} /* Số Ngày */
-  .tbl-hdr span:nth-child(8){display:none} /* Trừ Sao */
 
   /* ROW ITEM — mobile layout */
   .row-item{
-    grid-template-columns:minmax(0,2.5fr) 52px 52px 78px 44px 38px;
+    grid-template-columns:minmax(0,1fr) 50px 50px 52px 44px 42px;
     padding:7px 8px;
     gap:1px;
   }
-  /* Hide Sao+ col, Số Ngày col, Trừ Sao col on mobile (show in expandable) */
+  /* Hide Sao+ col on mobile */
   .row-item > div:nth-child(4){display:none} /* Sao+ */
-  .row-item > div:nth-child(7){display:none} /* Số Ngày */
-  .row-item > div:nth-child(8){display:none} /* Trừ Sao */
 
   .ri-name{font-size:11px}
   .ri-sub{font-size:9px}
@@ -1060,6 +1056,7 @@ body.role-ql .ql-only-flex{display:flex}
   <button class="nav-btn" onclick="showPage('bxh-sao')">🏆 BXH Sao</button>
   <button class="nav-btn ql-only" onclick="showPage('bxh-thidua')">🎖 Thi đua</button>
   <button class="nav-btn ql-only" onclick="showPage('thuong-tru')">⭐ T/T Sao</button>
+  <button class="nav-btn ql-only" onclick="showPage('sao-tich-luy')">💰 Sao TL</button>
   <button class="nav-btn ql-only" onclick="openQlRecManager()">📋 BC NV</button>
   <button class="nav-btn" onclick="showPage('phan-tich')">📈 Phân tích</button>
   <button class="nav-btn" onclick="showPage('cai-dat')">⚙️ Cài đặt</button>
@@ -1160,18 +1157,21 @@ body.role-ql .ql-only-flex{display:flex}
       <option value="TGDĐ">TGDĐ</option>
       <option value="Topzone">Topzone</option>
     </select>
-    <div style="display:flex;align-items:center;gap:6px;margin-left:auto">
+    <div style="display:flex;align-items:center;gap:6px">
       <label style="font-size:11px;font-weight:700;color:var(--t2)">Ngày/tháng:</label>
       <input type="number" id="days-in-month" min="1" max="31" value="26" style="width:56px;border:1px solid var(--bd2);border-radius:6px;padding:6px 8px;font-family:inherit;font-size:13px;font-weight:700" oninput="renderSheetSt()"/>
     </div>
     <button class="btn btn-p" onclick="addNh()">+ Ngành hàng</button>
+    <button class="btn btn-s" onclick="addNhCol()">+ Cột</button>
     <button class="btn btn-g" onclick="saveSheetStToSheets()">☁️ Lưu lên Sheets</button>
     <button class="btn btn-s" onclick="pullFromSheets()">⬇️ Kéo từ Sheets</button>
+    <a href="https://docs.google.com/spreadsheets/d/1sj-aDpw8w6aVI0BN-fPcAN1-PKP4FkQe1jC9tOoeSos/edit?gid=138751902#gid=138751902" target="_blank" class="btn btn-s" style="text-decoration:none;display:inline-flex;align-items:center;gap:5px">📄 Sheets</a>
   </div>
   <div class="sheet-wrap"><div id="sheet-st-body"></div></div>
   <div class="sheet-note">
     💡 <b>Chỉ tiêu tháng</b> của cả cửa hàng → app chia đều cho số ngày làm việc (mặc định 26 ngày).<br/>
-    <b>Chỉ tiêu ngày</b> = Chỉ tiêu tháng ÷ Số ngày. NV chia theo tỉ lệ hoặc đều.
+    <b>Chỉ tiêu ngày</b> = Chỉ tiêu tháng ÷ Số ngày. NV chia theo tỉ lệ hoặc đều.<br/>
+    ⭐ <b>Cột Trừ sao / Ngưỡng thưởng</b> đồng bộ với tab <b>T/T Sao</b> — thay đổi ở đây cập nhật ngay T/T Sao và ngược lại.
   </div>
 </div>
 
@@ -1254,7 +1254,7 @@ body.role-ql .ql-only-flex{display:flex}
     <div class="settings-title">🔗 Kết nối Google Apps Script</div>
     <div class="form-row">
       <label>URL Google Apps Script (Web App)</label>
-      <input type="url" id="cfg-api-url" placeholder="https://script.google.com/macros/s/AKfycbybxucqeGL9H8pdbC4Y_hE1EkwtmnZzkR5aaxzXmKZ4jy18zH5w7tUixql5Hkk3-jongQ/exec"/>
+      <input type="url" id="cfg-api-url" placeholder="https://script.google.com/macros/s/AKfycbwjiKMWRuYdvRWClNVAhZR31b8A3zLnlzhZ0JcMFowgMjpDBQeHocgWSlxsyhm4IFQayg/exec"/>
     </div>
     <div class="form-row">
       <label>📊 Link Google Sheets Target (Chỉ tiêu)</label>
@@ -1267,6 +1267,24 @@ body.role-ql .ql-only-flex{display:flex}
     <div class="btn-row">
       <button class="btn btn-p" onclick="saveCfgAndTest()">💾 Lưu & Kiểm tra</button>
       <button class="btn btn-s" onclick="pullFromSheets()">⬇️ Kéo dữ liệu từ Sheets</button>
+    </div>
+  </div>
+
+  <!-- SỐ NGÀY AUTO -->
+  <div class="settings-card ql-only">
+    <div class="settings-title">📅 Cài đặt cột Số Ngày (tự động đếm)</div>
+    <div style="font-size:12px;color:var(--t2);line-height:1.8;margin-bottom:12px">
+      Khi <b>Start</b>: mỗi ngày nhân viên <b>&lt;100%</b> → Số Ngày tự động <b>+1</b>.<br/>
+      Khi <b>&gt;100%</b> hoặc <b>bấm ⭐ Trừ sao</b> → Số Ngày tự reset về <b>0</b>.<br/>
+      Khi <b>Stop</b>: cột Số Ngày luôn hiển thị <b>0</b>, không đếm.
+    </div>
+    <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:12px">
+      <div id="so-ngay-status-badge" style="padding:8px 16px;border-radius:20px;font-size:13px;font-weight:800;background:var(--bg3);color:var(--t3);border:1.5px solid var(--bd2)">⬤ Chưa kích hoạt</div>
+      <button class="btn btn-g" id="so-ngay-start-btn" onclick="setSoNgayAuto(true)">▶ Start</button>
+      <button class="btn btn-s" id="so-ngay-stop-btn" onclick="setSoNgayAuto(false)">⏹ Stop</button>
+    </div>
+    <div style="font-size:11px;color:var(--t3)">
+      💡 Trạng thái được lưu vào bộ nhớ — tất cả nhân viên đều dùng chung cài đặt này khi QL lưu lên Sheets.
     </div>
   </div>
 
@@ -1354,6 +1372,51 @@ body.role-ql .ql-only-flex{display:flex}
       💡 <b>Thưởng 5⭐:</b> đạt ngưỡng % này · <b>Thưởng 10⭐:</b> đạt ngưỡng % này · <b>Thưởng 20⭐:</b> đạt ngưỡng % này · <b>Trừ sao:</b> khi chưa đạt 100%<br/>
       ✅ Sau khi lưu lên Sheets, toàn bộ nhân viên sẽ nhận cấu hình mới khi kéo dữ liệu.
     </div>
+  </div>
+</div>
+
+<!-- ══ PAGE: SAO TÍCH LŨY (QL only) ══ -->
+<div id="page-sao-tich-luy" class="page">
+  <div class="hdr">
+    <div><div class="hdr-title">SAO TÍCH LŨY</div><div class="hdr-sub">QL quản lý sao đầu tháng — đồng bộ ngay cho NV</div></div>
+  </div>
+  <div class="settings-card">
+    <div class="settings-title" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+      <span>💰 Bảng sao tích lũy nhân viên</span>
+      <div style="display:flex;gap:7px;flex-wrap:wrap">
+        <select id="stl-st" onchange="renderSaoTichLuy()" class="tbl-sel" style="font-size:12px;padding:6px 10px">
+          <option value="TGDĐ">TGDĐ</option>
+          <option value="Topzone">Topzone</option>
+        </select>
+        <button class="btn btn-g" onclick="saveSaoTichLuyToSheets()">☁️ Lưu & Đồng bộ</button>
+        <a href="https://docs.google.com/spreadsheets/d/1sj-aDpw8w6aVI0BN-fPcAN1-PKP4FkQe1jC9tOoeSos/edit?gid=138751902#gid=138751902" target="_blank" class="btn btn-s" style="text-decoration:none;display:inline-flex;align-items:center;gap:5px;font-size:12px;padding:8px 14px">📄 Sheets</a>
+      </div>
+    </div>
+    <div style="font-size:11px;color:var(--t3);line-height:1.7;margin:8px 0 12px">
+      📌 QL nhập <b>Sao tích lũy đầu tháng</b> cho từng nhân viên. Nhân viên chỉ xem, không chỉnh sửa.<br/>
+      🔄 Sau khi nhấn <b>Lưu & Đồng bộ</b>, số sao sẽ được cập nhật ngay cho tất cả nhân viên.
+    </div>
+    <div class="sheet-wrap"><table class="sheet" id="stl-table">
+      <thead><tr>
+        <th style="width:36px">STT</th>
+        <th>Mã NV</th>
+        <th>Tên nhân viên</th>
+        <th>⭐ Sao tích lũy</th>
+        <th>Ngày cập nhật</th>
+        <th>Cập nhật bởi</th>
+        <th>Lịch sử</th>
+      </tr></thead>
+      <tbody id="stl-body"></tbody>
+    </table></div>
+    <div class="sheet-note" style="margin-top:10px">
+      💡 <b>Công thức:</b> Sao hiện có = Sao TL đầu tháng + Sao kiếm được tháng này − Sao đã dùng<br/>
+      📋 <b>Lịch sử:</b> Mọi thay đổi đều được ghi lại để kiểm tra. Sao tích lũy không được âm.
+    </div>
+  </div>
+  <!-- Audit log -->
+  <div class="settings-card" style="margin-top:10px">
+    <div class="settings-title">📋 Lịch sử thay đổi sao tích lũy</div>
+    <div id="stl-audit-log" style="max-height:240px;overflow-y:auto"></div>
   </div>
 </div>
 
@@ -1876,7 +1939,7 @@ let CONFIG = {
   }
 };
 let activeChips = new Set();
-let API_URL = 'https://script.google.com/macros/s/AKfycbybxucqeGL9H8pdbC4Y_hE1EkwtmnZzkR5aaxzXmKZ4jy18zH5w7tUixql5Hkk3-jongQ/exec';
+let API_URL = 'https://script.google.com/macros/s/AKfycbwjiKMWRuYdvRWClNVAhZR31b8A3zLnlzhZ0JcMFowgMjpDBQeHocgWSlxsyhm4IFQayg/exec';
 const SHEETS_TARGET_URL = 'https://docs.google.com/spreadsheets/d/1sj-aDpw8w6aVI0BN-fPcAN1-PKP4FkQe1jC9tOoeSos/edit?gid=138751902#gid=138751902';
 
 function loadState(){
@@ -1899,7 +1962,7 @@ function showPage(p){
   document.querySelectorAll('.nav-btn').forEach(el=>el.classList.remove('active'));
   document.getElementById('page-'+p).classList.add('show');
   const allPages = currentRole==='ql'
-    ? ['bao-cao','sheet-nv','sheet-st','bxh-sao','bxh-thidua','thuong-tru','phan-tich','cai-dat']
+    ? ['bao-cao','sheet-nv','sheet-st','bxh-sao','bxh-thidua','thuong-tru','sao-tich-luy','phan-tich','cai-dat']
     : ['bao-cao','bxh-sao','phan-tich','cai-dat'];
   const idx = allPages.indexOf(p);
   const btns = document.querySelectorAll('.nav-btn');
@@ -1915,6 +1978,7 @@ function showPage(p){
   if(p==='bxh-sao') renderBxhSao();
   if(p==='bxh-thidua') renderBxhThiDua();
   if(p==='thuong-tru') renderThuongTru();
+  if(p==='sao-tich-luy') renderSaoTichLuy();
   if(p==='phan-tich'){
     const f=document.getElementById('tk-from'),t=document.getElementById('tk-to');
     if(!f.value){ const d=new Date(); d.setDate(1); f.value=d.toISOString().slice(0,10); }
@@ -1922,6 +1986,14 @@ function showPage(p){
     renderPhanTich();
   }
   if(p==='cai-dat') initSettings();
+}
+
+function rebuildNav(){
+  const nav = document.querySelector('.nav');
+  if(!nav) return;
+  // QL: 10 tabs (without BC NV button which is modal) | NV: 4 tabs
+  const cols = currentRole==='ql' ? 10 : 4;
+  nav.style.gridTemplateColumns = `repeat(${cols},1fr)`;
 }
 
 function showToast(msg, duration=2400){
@@ -2181,27 +2253,29 @@ async function onSelNv(){
 }
 
 function getPrevDaySao(st, mnv, ngay){
-  // Lấy sao tích lũy của ngày hôm trước
-  const prev = new Date(ngay); prev.setDate(prev.getDate()-1);
-  const prevStr = prev.toISOString().slice(0,10);
   const allKeys = LS.keys(`bc:${st}:${mnv}:`);
-  // Tính tổng tất cả ngày trước ngày hiện tại
-  let total = 0;
+  let fromBC = 0;
   allKeys.forEach(k=>{
     const d = LS.get(k);
     if(!d || d.ngay >= ngay) return;
-    total += (d.sao_net||0);
+    fromBC += (d.sao_net||0);
   });
-  return total;
+  // Cộng thêm sao tích lũy do QL set
+  const fromStl = getSaoTichLuyNV(st, mnv);
+  return fromBC + fromStl;
 }
 
 function loadSaoDangCo(st, mnv, ngayHienTai){
-  let total=0;
+  // Sao từ báo cáo các ngày (trừ ngày hiện tại)
+  let fromBC=0;
   LS.keys(`bc:${st}:${mnv}:`).forEach(k=>{
     if(k===`bc:${st}:${mnv}:${ngayHienTai}`) return;
     const d = LS.get(k);
-    if(d && d.sao_net) total += d.sao_net;
+    if(d && d.sao_net) fromBC += d.sao_net;
   });
+  // Sao tích lũy do QL set
+  const fromStl = getSaoTichLuyNV(st, mnv);
+  const total = fromBC + fromStl;
   document.getElementById('sao-hien-tai').textContent = total>0 ? `★ ${total}` : '0';
   return total;
 }
@@ -2239,40 +2313,75 @@ function buildChipBar(st){
 /* Helper: lấy số ngày từ ngày hôm qua cho môn item, trong ngữ cảnh render hiện tại */
 let _renderContext = {st:'', mnv:'', ngay:''};
 
+/* ═══════════════════════════════
+   SỐ NGÀY AUTO FLAG
+═══════════════════════════════ */
+const SO_NGAY_AUTO_KEY = 'so_ngay_auto_active';
+
+function isSoNgayAutoOn(){
+  return LS.get(SO_NGAY_AUTO_KEY) === true;
+}
+
+function setSoNgayAuto(active){
+  if(currentRole !== 'ql'){ showToast('⚠️ Chỉ QL mới thay đổi được!'); return; }
+  LS.set(SO_NGAY_AUTO_KEY, active);
+  updateSoNgayBadge();
+  showToast(active ? '▶ Đã bật tự động đếm Số Ngày' : '⏹ Đã tắt — Số Ngày sẽ hiện 0');
+}
+
+function updateSoNgayBadge(){
+  const badge = document.getElementById('so-ngay-status-badge');
+  const startBtn = document.getElementById('so-ngay-start-btn');
+  const stopBtn = document.getElementById('so-ngay-stop-btn');
+  if(!badge) return;
+  const on = isSoNgayAutoOn();
+  if(on){
+    badge.style.background = 'var(--g2)';
+    badge.style.color = 'var(--g)';
+    badge.style.borderColor = 'rgba(16,217,122,.3)';
+    badge.textContent = '⬤ Đang chạy — Số Ngày tự động +1';
+    if(startBtn){ startBtn.style.opacity='.4'; startBtn.style.pointerEvents='none'; }
+    if(stopBtn){ stopBtn.style.opacity='1'; stopBtn.style.pointerEvents='auto'; }
+  } else {
+    badge.style.background = 'var(--bg3)';
+    badge.style.color = 'var(--t3)';
+    badge.style.borderColor = 'var(--bd2)';
+    badge.textContent = '⬤ Đang dừng — Số Ngày = 0';
+    if(startBtn){ startBtn.style.opacity='1'; startBtn.style.pointerEvents='auto'; }
+    if(stopBtn){ stopBtn.style.opacity='.4'; stopBtn.style.pointerEvents='none'; }
+  }
+}
+
 function _getPrevSoNgay(item){
+  // Nếu QL chưa Start → luôn trả về 0
+  if(!isSoNgayAutoOn()) return 0;
+
   const {st, mnv, ngay} = _renderContext;
   if(!st || !mnv || !ngay) return 0;
-
-  // Chỉ tự động sau ngày 5 của tháng
-  const todayDate = new Date(ngay);
-  if(todayDate.getDate() <= 5) return 0;
 
   // Tìm bản ghi ngày hôm qua gần nhất (quét tối đa 3 ngày về trước)
   for(let back = 1; back <= 3; back++){
     const dPrev = new Date(ngay); dPrev.setDate(dPrev.getDate() - back);
     const prevStr = dPrev.toISOString().slice(0,10);
     const rec = LS.get(`bc:${st}:${mnv}:${prevStr}`);
-    if(!rec) continue; // không có báo cáo ngày đó, tìm ngày trước nữa
+    if(!rec) continue;
 
-    // Kiểm tra nếu hôm qua môn này đã hoàn thành → reset về 0
     const ct_nv = getCtNv(st, mnv, item);
     const actual = (rec.results && rec.results[item.nh]) || 0;
     const pct = ct_nv > 0 ? actual / ct_nv : 0;
-    if(pct >= (item.pct5||100)/100) return 0; // hôm qua đã hoàn thành → về 0
+    // Hôm qua đã hoàn thành → reset về 0
+    if(pct >= (item.pct5||100)/100) return 0;
+    // Hôm qua đã dùng sao → reset về 0
     if(rec.dung_sao_map){
       const iid = 'inp_'+item.nh.replace(/[^a-z0-9]/gi,'_');
-      if(rec.dung_sao_map[iid]) return 0; // hôm qua đã dùng sao → về 0
+      if(rec.dung_sao_map[iid]) return 0;
     }
-
     // Lấy số ngày đã lưu hôm qua và +1
     const prevSoNgay = rec.so_ngay_map?.[item.nh];
-    if(typeof prevSoNgay === 'number'){
-      return Math.min(prevSoNgay + 1, 10);
-    }
-    // Hôm qua có báo cáo nhưng chưa có so_ngay_map → bắt đầu đếm từ 1
+    if(typeof prevSoNgay === 'number') return Math.min(prevSoNgay + 1, 10);
     return 1;
   }
-  return 0; // không tìm thấy bản ghi nào
+  return 0;
 }
 
 /* ═══════════════════════════════
@@ -2283,22 +2392,15 @@ function rowHtml(item, ct_nv, actual, pct, trong, savedSoNgay, savedDungSao, sao
   const pctCls=pct>=(item.pct20||200)/100?'g':pct>=(item.pct5||100)/100?'ora':'r';
   const sp = getSaoPlus(item, pct);
   const iid='inp_'+item.nh.replace(/[^a-z0-9]/gi,'_');
-  const trongBadge = pct<(item.pct5||100)/100 ? getTrongBadge(trong) : `<span class="badge-0">✓</span>`;
 
-  // Cột Sao+: hiển thị số sao thực tế với màu sắc
+  // Cột Sao+
   let saoPlusHtml;
-  if(sp.sao >= 20){
-    saoPlusHtml = `<div style="text-align:center;font-size:13px;font-weight:800;color:#3b82f6">+20⭐</div>`;
-  } else if(sp.sao >= 10){
-    saoPlusHtml = `<div style="text-align:center;font-size:13px;font-weight:800;color:var(--g)">+10⭐</div>`;
-  } else if(sp.sao >= 5){
-    saoPlusHtml = `<div style="text-align:center;font-size:13px;font-weight:800;color:var(--a)">+5⭐</div>`;
-  } else {
-    saoPlusHtml = `<div style="text-align:center;font-size:11px;color:var(--t3)">—</div>`;
-  }
+  if(sp.sao >= 20) saoPlusHtml = `<div style="text-align:center;font-size:13px;font-weight:800;color:#3b82f6">+20⭐</div>`;
+  else if(sp.sao >= 10) saoPlusHtml = `<div style="text-align:center;font-size:13px;font-weight:800;color:var(--g)">+10⭐</div>`;
+  else if(sp.sao >= 5) saoPlusHtml = `<div style="text-align:center;font-size:13px;font-weight:800;color:var(--a)">+5⭐</div>`;
+  else saoPlusHtml = `<div style="text-align:center;font-size:11px;color:var(--t3)">—</div>`;
 
-  // Số ngày logic: nếu >100% thì 0; nếu <100% thì nhân viên chọn 0-10
-  // Giá trị mặc định: lấy từ saved (ngày hiện tại đã lưu), hoặc từ ngày hôm qua (+1 nếu tiếp tục chưa đạt)
+  // Số ngày
   const isOver100 = pct >= (item.pct5||100)/100;
   let soNgayVal;
   let soNgayIsAuto = false;
@@ -2307,43 +2409,50 @@ function rowHtml(item, ct_nv, actual, pct, trong, savedSoNgay, savedDungSao, sao
   } else if(typeof savedSoNgay === 'number'){
     soNgayVal = savedSoNgay;
   } else {
-    // Chưa có giá trị hôm nay → tự động từ ngày hôm qua
     soNgayVal = _getPrevSoNgay(item);
     soNgayIsAuto = soNgayVal > 0;
   }
   const soNgayOpts = [0,1,2,3,4,5,6,7,8,9,10].map(n=>`<option value="${n}"${soNgayVal===n?' selected':''}>${n}</option>`).join('');
-  const canhBaoHtml = canhBaoNgay ? `<div style="font-size:9px;color:var(--r);font-weight:700;margin-top:2px;text-align:center">⚠️ Check lại số ngày</div>` : '';
+  const canhBaoHtml = canhBaoNgay ? `<div style="font-size:9px;color:var(--r);font-weight:700;margin-top:2px;text-align:center">⚠️ Check lại</div>` : '';
   const snBorderColor = canhBaoNgay ? 'var(--r)' : soNgayIsAuto ? 'var(--a)' : 'var(--bd2)';
   const soNgayHtml = isOver100
     ? `<div style="text-align:center;font-size:11px;font-weight:700;color:var(--g)">0</div>`
     : `<div><select id="sn_${iid}" onchange="onSoNgayChange('${iid}')" style="width:100%;font-size:12px;font-weight:700;border:1.5px solid ${snBorderColor};border-radius:5px;padding:4px 2px;background:var(--bg2);color:${soNgayIsAuto?'var(--a)':'var(--t1)'};font-family:inherit;text-align:center">${soNgayOpts}</select>${canhBaoHtml}</div>`;
 
-  // Cột "Trừ Sao": chỉ hiện khi chưa hoàn thành
+  // Cột "Trừ Sao": icon hiện số sao trừ, nhấn để toggle; nhấn lại để reset số ngày về 0
   const dungSaoActive = savedDungSao === true;
   let truSaoHtml;
   if(isOver100){
-    truSaoHtml = `<div style="text-align:center;font-size:11px;color:var(--t3)">—</div>`;
+    truSaoHtml = `<div style="text-align:center;font-size:18px;color:var(--t3);opacity:.3">⭐</div>`;
   } else {
     const canTru = saoCuHienTai >= item.tru;
     if(dungSaoActive){
-      truSaoHtml = `<div style="text-align:center">
-        <span style="font-size:10px;font-weight:700;color:var(--r)">-${item.tru}⭐</span>
-        <button id="ds_${iid}" onclick="toggleDungSao('${iid}')" style="display:block;width:100%;background:var(--r2);color:var(--r);border:1.5px solid #fecdd3;border-radius:5px;padding:3px 2px;font-size:9px;font-weight:700;cursor:pointer;font-family:inherit;margin-top:2px">✓ Đang dùng</button>
+      // Active: icon vàng sáng, hiện số sao, nhấn để tắt + reset số ngày
+      truSaoHtml = `<div style="text-align:center;cursor:pointer" onclick="toggleDungSao('${iid}')" title="Đang trừ ${item.tru}⭐ — Nhấn để huỷ & reset số ngày về 0">
+        <div style="font-size:22px;line-height:1;filter:drop-shadow(0 0 6px #fbbf24)">⭐</div>
+        <div style="font-size:9px;font-weight:800;color:var(--r);margin-top:1px">−${item.tru}</div>
       </div>`;
     } else if(!canTru){
-      truSaoHtml = `<div style="text-align:center;font-size:9px;color:var(--t3);font-weight:600">Không đủ sao<br/>(cần ${item.tru})</div>`;
+      truSaoHtml = `<div style="text-align:center;cursor:not-allowed;opacity:.4" title="Không đủ sao (cần ${item.tru}⭐)">
+        <div style="font-size:22px;line-height:1">⭐</div>
+        <div style="font-size:9px;color:var(--t3);margin-top:1px">${item.tru}</div>
+      </div>`;
     } else {
-      truSaoHtml = `<button id="ds_${iid}" onclick="toggleDungSao('${iid}')" style="width:100%;background:var(--r2);color:var(--r);border:1.5px solid #fecdd3;border-radius:5px;padding:5px 2px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit">⭐ Trừ</button>`;
+      // Inactive: icon mờ, nhấn để dùng sao
+      truSaoHtml = `<div style="text-align:center;cursor:pointer;opacity:.55" onclick="toggleDungSao('${iid}')" title="Nhấn để dùng ${item.tru}⭐ trừ môn này & reset số ngày về 0">
+        <div style="font-size:22px;line-height:1">⭐</div>
+        <div style="font-size:9px;font-weight:700;color:var(--t2);margin-top:1px">−${item.tru}</div>
+      </div>`;
     }
   }
 
+  // Grid: Môn | CT | % | Sao+ | Kết quả | Số ngày | Trừ sao
   return `<div class="row-item" id="row_${iid}">
     <div><div class="ri-name">${item.nh}</div><div class="ri-sub">CT ngày: ${fmt(ct_nv)}</div></div>
     <div class="ri-num">${fmt(ct_nv)}</div>
     <div class="ri-pct ${pctCls}">${pctStr}</div>
     <div class="ri-c">${saoPlusHtml}</div>
     <div class="ri-kq"><input type="number" step="any" min="0" id="${iid}" value="${actual||''}" placeholder="0" oninput="onInputChange()"/></div>
-    <div class="ri-c">${trongBadge}</div>
     <div class="ri-c">${soNgayHtml}</div>
     <div class="ri-c">${truSaoHtml}</div>
   </div>`;
@@ -2369,7 +2478,7 @@ function renderBaoCao(st, nv, mnv, ngay, saved, note, checklist, saoOverride, sa
 
   html+=`<div class="tbl-hdr">
     <span>Môn thi đua</span><span>CT Ngày</span><span>% Đạt</span><span>Sao+</span>
-    <span>Kết quả</span><span>Trống</span><span>Số Ngày</span><span>Trừ Sao</span>
+    <span>Kết quả</span><span>Số Ngày</span><span>⭐ Trừ</span>
   </div>`;
 
   const incomplete=[], complete=[];
@@ -2615,19 +2724,20 @@ function renderSheetNv(){
   const st=document.getElementById('sheet-nv-st').value;
   const nvs=CONFIG[st].nv;
   let html=`<table class="sheet"><thead><tr>
-    <th>MNV</th><th>Tên nhân viên</th><th>Tỉ lệ (%)<br/><small style="font-weight:400;opacity:.8">0 = chia đều</small></th><th></th>
+    <th style="width:36px">STT</th><th>MNV</th><th>Tên nhân viên</th><th>Tỉ lệ (%)<br/><small style="font-weight:400;opacity:.8">0 = chia đều</small></th><th style="width:55px"></th>
   </tr></thead><tbody>`;
   nvs.forEach((n,i)=>html+=`<tr>
+    <td style="text-align:center;font-weight:700;color:var(--t3);font-size:12px">${i+1}</td>
     <td style="width:80px"><input type="text" value="${n.mnv}" id="nv-mnv-${i}"/></td>
     <td><input type="text" value="${n.ten}" id="nv-ten-${i}"/></td>
     <td style="width:120px"><input type="number" min="0" max="100" value="${n.ratio||0}" id="nv-ratio-${i}"/></td>
-    <td style="width:55px"><button class="btn btn-s" style="padding:4px 9px;font-size:11px" onclick="removeNv(${i})">Xoá</button></td>
+    <td><button class="btn btn-s" style="padding:4px 9px;font-size:11px" onclick="removeNv(${i})">🗑</button></td>
   </tr>`);
   html+=`</tbody></table>`;
   document.getElementById('sheet-nv-body').innerHTML=html;
 }
 function addNv(){ const st=document.getElementById('sheet-nv-st').value; CONFIG[st].nv.push({mnv:'',ten:'',ratio:0}); renderSheetNv(); }
-function removeNv(i){ const st=document.getElementById('sheet-nv-st').value; CONFIG[st].nv.splice(i,1); renderSheetNv(); }
+function removeNv(i){ const st=document.getElementById('sheet-nv-st').value; if(!confirm('Xoá nhân viên này?')) return; CONFIG[st].nv.splice(i,1); renderSheetNv(); }
 function collectSheetNv(){
   const st=document.getElementById('sheet-nv-st').value;
   CONFIG[st].nv.forEach((n,i)=>{
@@ -2637,7 +2747,7 @@ function collectSheetNv(){
 }
 async function saveSheetNvToSheets(){
   collectSheetNv(); saveState();
-  showToast('Đã lưu local...');
+  showToast('Đang lưu...');
   if(API_URL){ try{ await callAPIPost('saveConfig',{config:CONFIG}); showToast('✅ Đã lưu lên Google Sheets!'); }catch(e){ showToast('⚠️ Lưu local OK. Sheets: '+e.message); } }
   else showToast('✅ Đã lưu local (chưa kết nối Sheets)');
 }
@@ -2645,46 +2755,113 @@ async function saveSheetNvToSheets(){
 /* ═══════════════════════════════
    SHEET SIÊU THỊ
 ═══════════════════════════════ */
+// Extra columns state per ST
+let nhExtraCols = { 'TGDĐ': [], 'Topzone': [] };
+
 function renderSheetSt(){
   const st=document.getElementById('sheet-st-sel').value;
   const nhs=CONFIG[st].nh;
   const wd=getWorkDays();
   if(!CONFIG[st].workDays) CONFIG[st].workDays=wd;
+  const extraCols = nhExtraCols[st]||[];
   let html=`<table class="sheet"><thead><tr>
-    <th>Ngành hàng</th><th>CT Tháng (cả ST)</th><th>CT Ngày (÷30)</th><th>Trừ sao</th><th>Sao KD</th><th></th>
+    <th style="width:36px">STT</th>
+    <th>Ngành hàng</th>
+    <th style="width:110px">CT Tháng (cả ST)</th>
+    <th style="width:90px">CT Ngày (÷30)</th>
+    <th style="width:80px">Trừ sao ⭐</th>
+    <th style="width:80px">+5⭐ (%)</th>
+    <th style="width:80px">+10⭐ (%)</th>
+    <th style="width:80px">+20⭐ (%)</th>
+    ${extraCols.map((c,ci)=>`<th style="min-width:90px;position:relative">${c}<button onclick="removeNhCol(${ci})" style="position:absolute;top:2px;right:2px;background:rgba(255,77,109,.7);color:#fff;border:none;border-radius:3px;font-size:8px;cursor:pointer;padding:1px 4px;line-height:1">✕</button></th>`).join('')}
+    <th style="width:55px"></th>
   </tr></thead><tbody>`;
   nhs.forEach((n,i)=>{
     const ctNgay = (n.ct/30).toFixed(2);
     html+=`<tr>
+      <td style="text-align:center;font-weight:700;color:var(--t3);font-size:12px">${i+1}</td>
       <td><input type="text" value="${n.nh}" id="nh-name-${i}"/></td>
-      <td style="width:120px"><input type="number" step="any" value="${n.ct}" id="nh-ct-${i}" oninput="refreshCtNgayCell(${i})"/></td>
-      <td style="width:100px;color:var(--p);font-weight:700" id="nh-ctday-${i}">${ctNgay}</td>
-      <td style="width:90px"><input type="number" step="1" value="${n.tru||50}" id="nh-tru-${i}"/></td>
-      <td style="width:80px"><input type="number" step="1" value="${n.sao_kd||0}" id="nh-saokd-${i}"/></td>
-      <td style="width:55px"><button class="btn btn-s" style="padding:4px 9px;font-size:11px" onclick="removeNh(${i})">Xoá</button></td>
+      <td><input type="number" step="any" value="${n.ct}" id="nh-ct-${i}" oninput="refreshCtNgayCell(${i})"/></td>
+      <td style="color:var(--p);font-weight:700;text-align:center" id="nh-ctday-${i}">${ctNgay}</td>
+      <td><input type="number" step="1" min="0" value="${n.tru||50}" id="nh-tru-${i}"/></td>
+      <td><input type="number" step="1" min="1" max="999" value="${n.pct5||100}" id="nh-p5-${i}"/></td>
+      <td><input type="number" step="1" min="1" max="999" value="${n.pct10||120}" id="nh-p10-${i}"/></td>
+      <td><input type="number" step="1" min="1" max="9999" value="${n.pct20||200}" id="nh-p20-${i}"/></td>
+      ${extraCols.map((_,ci)=>`<td><input type="text" value="${(n.extra||[])[ci]||''}" id="nh-extra-${i}-${ci}"/></td>`).join('')}
+      <td><button class="btn btn-s" style="padding:4px 9px;font-size:11px" onclick="removeNh(${i})">🗑</button></td>
     </tr>`;
   });
   html+=`</tbody></table>`;
   document.getElementById('sheet-st-body').innerHTML=html;
 }
+
 function refreshCtNgayCell(i){
   const ct=parseFloat(document.getElementById(`nh-ct-${i}`)?.value)||0;
   const el=document.getElementById(`nh-ctday-${i}`);
   if(el) el.textContent=(ct/30).toFixed(2);
 }
-function addNh(){ const st=document.getElementById('sheet-st-sel').value; CONFIG[st].nh.push({nh:'Ngành hàng mới',ct:0,tru:50,sao_kd:0}); renderSheetSt(); }
-function removeNh(i){ const st=document.getElementById('sheet-st-sel').value; CONFIG[st].nh.splice(i,1); renderSheetSt(); }
+
+function addNh(){
+  const st=document.getElementById('sheet-st-sel').value;
+  CONFIG[st].nh.push({nh:'Ngành hàng mới',ct:0,tru:50,sao_kd:0,pct5:100,pct10:120,pct20:200});
+  renderSheetSt();
+}
+
+function addNhCol(){
+  const st=document.getElementById('sheet-st-sel').value;
+  const name = prompt('Tên cột mới:','Ghi chú');
+  if(!name) return;
+  if(!nhExtraCols[st]) nhExtraCols[st]=[];
+  nhExtraCols[st].push(name);
+  renderSheetSt();
+}
+
+function removeNhCol(ci){
+  const st=document.getElementById('sheet-st-sel').value;
+  nhExtraCols[st].splice(ci,1);
+  renderSheetSt();
+}
+
+function removeNh(i){
+  const st=document.getElementById('sheet-st-sel').value;
+  if(!confirm('Xoá ngành hàng này?')) return;
+  CONFIG[st].nh.splice(i,1);
+  renderSheetSt();
+}
+
+function collectSheetSt(){
+  const st=document.getElementById('sheet-st-sel').value;
+  const extraCols = nhExtraCols[st]||[];
+  CONFIG[st].nh.forEach((n,i)=>{
+    const nm=document.getElementById(`nh-name-${i}`),ct=document.getElementById(`nh-ct-${i}`);
+    const tr=document.getElementById(`nh-tru-${i}`),p5=document.getElementById(`nh-p5-${i}`);
+    const p10=document.getElementById(`nh-p10-${i}`),p20=document.getElementById(`nh-p20-${i}`);
+    if(nm) n.nh=nm.value.trim();
+    if(ct) n.ct=parseFloat(ct.value)||0;
+    if(tr) n.tru=parseInt(tr.value)||50;
+    if(p5) n.pct5=parseInt(p5.value)||100;
+    if(p10) n.pct10=parseInt(p10.value)||120;
+    if(p20) n.pct20=parseInt(p20.value)||200;
+    // Extra cols
+    if(extraCols.length){
+      n.extra = extraCols.map((_,ci)=>{
+        const el=document.getElementById(`nh-extra-${i}-${ci}`);
+        return el?el.value:'';
+      });
+    }
+  });
+}
+
 async function saveSheetStToSheets(){
   const st=document.getElementById('sheet-st-sel').value;
   const wd=getWorkDays();
   CONFIG[st].workDays=wd;
-  CONFIG[st].nh.forEach((n,i)=>{
-    const nm=document.getElementById(`nh-name-${i}`),ct=document.getElementById(`nh-ct-${i}`),tr=document.getElementById(`nh-tru-${i}`),sk=document.getElementById(`nh-saokd-${i}`);
-    if(nm) n.nh=nm.value.trim(); if(ct) n.ct=parseFloat(ct.value)||0; if(tr) n.tru=parseInt(tr.value)||50; if(sk) n.sao_kd=parseInt(sk.value)||0;
-  });
+  collectSheetSt();
   saveState(); activeChips.clear();
-  if(API_URL){ try{ await callAPIPost('saveConfig',{config:CONFIG}); showToast('✅ Đã lưu lên Google Sheets!'); }catch(e){ showToast('⚠️ Lưu local OK'); } }
-  else showToast('✅ Đã lưu local');
+  // Tự động đồng bộ với Thưởng/Trừ sao (cùng dùng CONFIG[st].nh)
+  if(document.getElementById('page-thuong-tru')?.classList.contains('show')) renderThuongTru();
+  if(API_URL){ try{ await callAPIPost('saveConfig',{config:CONFIG}); showToast('✅ Đã lưu lên Sheets! Đồng bộ T/T Sao tự động.'); }catch(e){ showToast('⚠️ Lưu local OK'); } }
+  else showToast('✅ Đã lưu local — Đồng bộ T/T Sao tự động');
 }
 
 /* ═══════════════════════════════
@@ -3542,16 +3719,19 @@ function renderBxhThiDua(){
 ═══════════════════════════════ */
 function renderThuongTru(){
   const st = document.getElementById('tt-st')?.value||'TGDĐ';
+  // Đồng bộ từ Sheet ST trước nếu đang mở
   const nhs = CONFIG[st].nh;
   let html=`<table class="sheet"><thead><tr>
+    <th>STT</th>
     <th>Ngành hàng</th>
     <th>Ngưỡng +5⭐(%)</th>
     <th>Ngưỡng +10⭐(%)</th>
     <th>Ngưỡng +20⭐(%)</th>
-    <th>Trừ sao</th>
+    <th>Trừ sao ⭐</th>
   </tr></thead><tbody>`;
   nhs.forEach((n,i)=>{
     html+=`<tr>
+      <td style="text-align:center;font-weight:700;color:var(--t3);font-size:12px">${i+1}</td>
       <td style="font-weight:700;font-size:12px">${n.nh}</td>
       <td style="width:100px"><input type="number" min="1" max="500" value="${n.pct5||100}" id="tt-p5-${i}" style="width:70px;border:1px solid var(--bd2);border-radius:4px;padding:5px 8px;font-family:inherit;font-size:13px;font-weight:700;text-align:center"/> %</td>
       <td style="width:100px"><input type="number" min="1" max="500" value="${n.pct10||120}" id="tt-p10-${i}" style="width:70px;border:1px solid var(--bd2);border-radius:4px;padding:5px 8px;font-family:inherit;font-size:13px;font-weight:700;text-align:center"/> %</td>
@@ -3747,6 +3927,145 @@ function qlDeleteRecord(key){
   LS.del(key);
   showToast('🗑 Đã xóa báo cáo!');
   renderQlRecords();
+}
+
+/* ═══════════════════════════════
+   SAO TÍCH LŨY (QL manage)
+═══════════════════════════════ */
+// Storage key for sao tich luy
+const STL_KEY = 'stl_data';
+const STL_AUDIT_KEY = 'stl_audit';
+
+function getStlData(){
+  return LS.get(STL_KEY) || { TGDĐ:{}, Topzone:{} };
+}
+function getStlAudit(){
+  return LS.get(STL_AUDIT_KEY) || [];
+}
+
+function renderSaoTichLuy(){
+  if(currentRole !== 'ql') return;
+  const st = document.getElementById('stl-st')?.value||'TGDĐ';
+  const stlData = getStlData();
+  const nvs = CONFIG[st]?.nv||[];
+  const tbody = document.getElementById('stl-body');
+  if(!tbody) return;
+  let html = '';
+  nvs.forEach((nv,i)=>{
+    const rec = stlData[st]?.[nv.mnv] || {sao:0, updatedAt:'', updatedBy:''};
+    const sao = rec.sao || 0;
+    html+=`<tr>
+      <td style="text-align:center;font-weight:700;color:var(--t3)">${i+1}</td>
+      <td style="font-weight:600;font-size:12px">${nv.mnv}</td>
+      <td style="font-weight:700">${nv.ten}</td>
+      <td style="text-align:center">
+        <input type="number" min="0" id="stl-sao-${nv.mnv}" value="${sao}"
+          style="width:80px;border:1.5px solid var(--bd2);border-radius:6px;padding:6px 8px;font-family:inherit;font-size:16px;font-weight:800;text-align:center;background:var(--bg3);color:var(--a)"
+          oninput="stlValidate('${nv.mnv}')"/>
+        <span style="font-size:16px;margin-left:4px">⭐</span>
+      </td>
+      <td style="font-size:11px;color:var(--t3)">${rec.updatedAt||'—'}</td>
+      <td style="font-size:11px;color:var(--t3)">${rec.updatedBy||'—'}</td>
+      <td>
+        <button class="btn btn-s" style="font-size:11px;padding:5px 10px" onclick="showStlHistory('${nv.mnv}','${nv.ten}')">📋</button>
+      </td>
+    </tr>`;
+  });
+  tbody.innerHTML = html;
+  renderStlAudit();
+}
+
+function stlValidate(mnv){
+  const el = document.getElementById(`stl-sao-${mnv}`);
+  if(!el) return;
+  const v = parseFloat(el.value);
+  if(v < 0){ el.value = 0; showToast('⚠️ Sao tích lũy không được âm!'); }
+}
+
+async function saveSaoTichLuyToSheets(){
+  if(currentRole !== 'ql'){ showToast('⚠️ Chỉ QL mới dùng được!'); return; }
+  const st = document.getElementById('stl-st')?.value||'TGDĐ';
+  const stlData = getStlData();
+  if(!stlData[st]) stlData[st]={};
+  const nvs = CONFIG[st]?.nv||[];
+  const now = new Date().toLocaleString('vi-VN');
+  const auditLog = getStlAudit();
+  let changed = 0;
+  nvs.forEach(nv=>{
+    const el = document.getElementById(`stl-sao-${nv.mnv}`);
+    if(!el) return;
+    const newSao = Math.max(0, parseFloat(el.value)||0);
+    const oldSao = stlData[st]?.[nv.mnv]?.sao || 0;
+    if(newSao !== oldSao){
+      auditLog.unshift({
+        ts: Date.now(),
+        st, mnv:nv.mnv, ten:nv.ten,
+        oldSao, newSao,
+        updatedBy: 'Quản lý',
+        updatedAt: now
+      });
+      changed++;
+    }
+    stlData[st][nv.mnv] = { sao: newSao, updatedAt: now, updatedBy: 'Quản lý' };
+  });
+  // Giữ tối đa 200 audit records
+  while(auditLog.length > 200) auditLog.pop();
+  LS.set(STL_KEY, stlData);
+  LS.set(STL_AUDIT_KEY, auditLog);
+  // Đẩy lên Sheets
+  if(API_URL){
+    try{
+      await callAPIPost('saveSaoTichLuy', { st, data: stlData[st] });
+      showToast(`✅ Đồng bộ xong! ${changed} NV thay đổi → NV nhận ngay`);
+    }catch(e){
+      showToast(`✅ Lưu local OK (${changed} thay đổi). Sheets: ${e.message}`);
+    }
+  } else {
+    showToast(`✅ Đã lưu! ${changed} thay đổi — NV nhận ngay`);
+  }
+  renderSaoTichLuy();
+  // Refresh sao-hien-tai nếu đang xem báo cáo
+  const selSt = document.getElementById('sel-st')?.value;
+  const selMnv = document.getElementById('sel-nv')?.value;
+  const selNgay = document.getElementById('sel-ngay')?.value;
+  if(selSt&&selMnv&&selNgay) loadSaoDangCo(selSt,selMnv,selNgay);
+}
+
+function getSaoTichLuyNV(st, mnv){
+  // Trả về sao tích lũy đầu tháng do QL set
+  const data = getStlData();
+  return data?.[st]?.[mnv]?.sao || 0;
+}
+
+function showStlHistory(mnv, ten){
+  const audit = getStlAudit();
+  const history = audit.filter(a=>a.mnv===mnv);
+  if(!history.length){ showToast(`Chưa có lịch sử thay đổi cho ${ten}`); return; }
+  let msg = `Lịch sử sao TL — ${ten}:\n`;
+  history.slice(0,10).forEach(a=>{
+    msg += `${a.updatedAt}: ${a.oldSao}⭐ → ${a.newSao}⭐ (${a.updatedBy})\n`;
+  });
+  alert(msg);
+}
+
+function renderStlAudit(){
+  const log = document.getElementById('stl-audit-log');
+  if(!log) return;
+  const audit = getStlAudit();
+  if(!audit.length){ log.innerHTML=`<p style="color:var(--t3);font-size:12px;padding:10px">Chưa có lịch sử thay đổi.</p>`; return; }
+  let html = '';
+  audit.slice(0,50).forEach(a=>{
+    const diff = a.newSao - a.oldSao;
+    html+=`<div style="padding:8px 12px;border-bottom:1px solid var(--bd);display:flex;align-items:center;gap:10px;font-size:12px">
+      <div style="flex:1">
+        <b>${a.ten}</b> <span class="chip-${a.st==='TGDĐ'?'tgdd':'tz'}" style="font-size:10px">${a.st}</span>
+        — ${a.oldSao}⭐ → <b>${a.newSao}⭐</b>
+        <span style="color:${diff>=0?'var(--g)':'var(--r)'};font-weight:700">${diff>=0?'+':''}${diff}</span>
+      </div>
+      <div style="font-size:10px;color:var(--t3)">${a.updatedAt} · ${a.updatedBy}</div>
+    </div>`;
+  });
+  log.innerHTML = html;
 }
 
 init();
