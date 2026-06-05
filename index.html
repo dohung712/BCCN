@@ -408,6 +408,7 @@ a{color:var(--p);text-decoration:none}
 .sync-dot.err{background:var(--r)}
 .sync-dot.loading{background:var(--a);animation:pulse 1s infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
 .sync-lbl{flex:1;color:var(--t2)}
 .sync-btn{
   font-size:11px;font-weight:700;color:var(--p);cursor:pointer;
@@ -1053,6 +1054,7 @@ body.role-ql .ql-only-flex{display:flex}
   <button class="nav-btn active" onclick="showPage('bao-cao')">📊 Báo cáo</button>
   <button class="nav-btn ql-only" onclick="showPage('sheet-nv')">👤 NV</button>
   <button class="nav-btn ql-only" onclick="showPage('sheet-st')">🏪 ST</button>
+  <button class="nav-btn ql-only" onclick="showPage('ql-target')">🎯 Target</button>
   <button class="nav-btn" onclick="showPage('bxh-sao')">🏆 BXH Sao</button>
   <button class="nav-btn ql-only" onclick="showPage('bxh-thidua')">🎖 Thi đua</button>
   <button class="nav-btn ql-only" onclick="showPage('thuong-tru')">⭐ T/T Sao</button>
@@ -1176,6 +1178,37 @@ body.role-ql .ql-only-flex{display:flex}
     <b>Chỉ tiêu ngày</b> = Chỉ tiêu tháng ÷ Số ngày. NV chia theo tỉ lệ hoặc đều.<br/>
     ⭐ <b>Cột Trừ sao / Ngưỡng thưởng</b> đồng bộ với tab <b>T/T Sao</b> — thay đổi ở đây cập nhật ngay T/T Sao và ngược lại.
   </div>
+</div>
+
+<!-- ══ PAGE: QL TARGET (QL only) ══ -->
+<div id="page-ql-target" class="page">
+  <div class="hdr">
+    <div><div class="hdr-title">🎯 QUẢN LÝ TARGET</div><div class="hdr-sub">Chỉnh Target · Trừ sao · Ngưỡng · Môn thi đua — đồng bộ NV ngay</div></div>
+  </div>
+
+  <!-- Actions bar -->
+  <div class="tbl-actions" style="flex-wrap:wrap;gap:6px">
+    <select id="qt-st" class="tbl-sel" onchange="renderQlTarget()">
+      <option value="TGDĐ">TGDĐ</option>
+      <option value="Topzone">Topzone</option>
+    </select>
+    <button class="btn btn-p" onclick="qtAddMon()">+ Thêm môn</button>
+    <button class="btn btn-g" onclick="qtSaveToSheets()" style="min-width:140px">☁️ Lưu & Đồng bộ NV</button>
+    <button class="btn btn-s" onclick="pullFromSheets()">⬇️ Kéo từ Sheets</button>
+  </div>
+
+  <!-- Info box -->
+  <div style="background:var(--p3);border:1px solid rgba(124,110,245,.2);border-radius:var(--rad);padding:11px 14px;margin-bottom:12px;font-size:12px;color:var(--t2);line-height:1.8">
+    ✏️ <b>Chỉnh trực tiếp</b> tại bảng bên dưới → nhấn <b style="color:var(--g)">☁️ Lưu & Đồng bộ NV</b> để NV nhận ngay.<br/>
+    📲 <b>NV sẽ tự động pull config mới</b> khi mở trang Báo cáo — không cần làm gì thêm.<br/>
+    🗑 Nhấn <b style="color:var(--r)">✕</b> để xóa môn. <b>Target</b> = chỉ tiêu tháng cả cửa hàng (app tự chia ngày).
+  </div>
+
+  <!-- Table -->
+  <div id="qt-body"></div>
+
+  <!-- Summary -->
+  <div id="qt-summary" style="margin-top:10px;font-size:12px;color:var(--t3)"></div>
 </div>
 
 <!-- ══ PAGE: PHÂN TÍCH ══ -->
@@ -1647,6 +1680,8 @@ function enterApp(role){
   // Tự động chọn siêu thị + nhân viên nếu là NV
   if(role==='nv' && currentNvLogin){
     autoFillNvSelectors(currentNvLogin);
+    // NV: pull config mới nhất từ Sheets (silent, throttled)
+    setTimeout(autoSyncConfigForNv, 800);
   }
 }
 
@@ -1676,7 +1711,7 @@ function rebuildNav(){
   const nav = document.querySelector('.nav');
   if(!nav) return;
   // QL: 8 tabs | NV: 3 tabs (báo cáo, BXH Sao, phân tích, cài đặt)
-  const cols = currentRole==='ql' ? 8 : 4;
+  const cols = currentRole==='ql' ? 11 : 4;
   nav.style.gridTemplateColumns = `repeat(${cols},1fr)`;
 }
 
@@ -1942,7 +1977,7 @@ let CONFIG = {
   }
 };
 let activeChips = new Set();
-let API_URL = 'https://script.google.com/macros/s/AKfycbw4Itp_0VlaY2GMfXFlZkTBAWsReslEq86eokhtx00R21k5wB33QeLCiEPQSxjAj9W2OQ/exec';
+let API_URL = 'https://script.google.com/macros/s/AKfycbyT4aL91o6RERomfx73X-V9VI8TBDzbVqNByFxIYQYrSQ9bdxS5H4cvoxGalV2yw4T-/exec';
 const SHEETS_TARGET_URL = 'https://docs.google.com/spreadsheets/d/1sj-aDpw8w6aVI0BN-fPcAN1-PKP4FkQe1jC9tOoeSos/edit?gid=138751902#gid=138751902';
 
 function loadState(){
@@ -1965,7 +2000,7 @@ function showPage(p){
   document.querySelectorAll('.nav-btn').forEach(el=>el.classList.remove('active'));
   document.getElementById('page-'+p).classList.add('show');
   const allPages = currentRole==='ql'
-    ? ['bao-cao','sheet-nv','sheet-st','bxh-sao','bxh-thidua','thuong-tru','sao-tich-luy','phan-tich','cai-dat']
+    ? ['bao-cao','sheet-nv','sheet-st','ql-target','bxh-sao','bxh-thidua','thuong-tru','sao-tich-luy','phan-tich','cai-dat']
     : ['bao-cao','bxh-sao','phan-tich','cai-dat'];
   const idx = allPages.indexOf(p);
   const btns = document.querySelectorAll('.nav-btn');
@@ -1976,8 +2011,12 @@ function showPage(p){
       visIdx++;
     }
   });
+  if(p==='bao-cao' && currentRole==='nv'){
+    setTimeout(autoSyncConfigForNv, 500);
+  }
   if(p==='sheet-nv') renderSheetNv();
   if(p==='sheet-st') renderSheetSt();
+  if(p==='ql-target') renderQlTarget();
   if(p==='bxh-sao'){
     if(currentRole==='ql' && API_URL){
       const d=new Date(); d.setDate(1);
@@ -2007,7 +2046,7 @@ function rebuildNav(){
   const nav = document.querySelector('.nav');
   if(!nav) return;
   // QL: 10 tabs (without BC NV button which is modal) | NV: 4 tabs
-  const cols = currentRole==='ql' ? 10 : 4;
+  const cols = currentRole==='ql' ? 11 : 4;
   nav.style.gridTemplateColumns = `repeat(${cols},1fr)`;
 }
 
@@ -2245,28 +2284,130 @@ function onSelSt(){
   document.getElementById('sao-hien-tai').textContent='—';
   document.getElementById('chip-bar-wrap').style.display='none';
   document.getElementById('days-info-bar').innerHTML='';
+  // Reset sync flag khi đổi ST để bắt buộc đồng bộ lại
+  _configSynced = false;
 }
+
+// Flag: đã đồng bộ config trong phiên này chưa
+let _configSynced = false;
 
 async function onSelNv(){
   const st=document.getElementById('sel-st').value;
   const mnv=document.getElementById('sel-nv').value;
   const ngay=document.getElementById('sel-ngay').value;
   if(!st||!mnv||!ngay){ document.getElementById('bc-body').innerHTML=''; return; }
+
+  // ── Bắt buộc đồng bộ trước khi nhập ──
+  if(!_configSynced){
+    document.getElementById('bc-body').innerHTML = `
+      <div style="margin:24px 0;padding:20px 18px;background:var(--a2);border:2px solid var(--a);border-radius:var(--rad);text-align:center">
+        <div style="font-size:28px;margin-bottom:8px">⚠️</div>
+        <div style="font-size:14px;font-weight:800;color:var(--t1);margin-bottom:6px">Chưa đồng bộ dữ liệu!</div>
+        <div style="font-size:12px;color:var(--t2);margin-bottom:14px;line-height:1.7">
+          Bắt buộc bấm <b>Kiểm tra & Đồng bộ</b> để tải đúng<br/>
+          danh sách môn thi đua và chỉ tiêu từ hệ thống.
+        </div>
+        <button onclick="syncConfigAndLoad()" style="background:linear-gradient(135deg,var(--p),var(--p2));color:#fff;border:none;border-radius:10px;padding:12px 28px;font-size:14px;font-weight:800;cursor:pointer;font-family:inherit;box-shadow:0 4px 16px rgba(124,110,245,.4)">
+          🔄 Kiểm tra & Đồng bộ
+        </button>
+      </div>`;
+    return;
+  }
+
   const nv=CONFIG[st].nv.find(n=>n.mnv===mnv);
   document.getElementById('hdr-sub').textContent=`${st} — ${nv.ten} — ${ngay}`;
   const key=`bc:${st}:${mnv}:${ngay}`;
   const saved = LS.get(key)||{};
-  // Reset dungSaoState và restore từ saved
   dungSaoState = {};
-  if(saved.dung_sao_map){
-    Object.assign(dungSaoState, saved.dung_sao_map);
-  }
+  if(saved.dung_sao_map) Object.assign(dungSaoState, saved.dung_sao_map);
   loadSaoDangCo(st, mnv, ngay);
   buildChipBar(st);
   document.getElementById('days-info-bar').innerHTML = getDaysInfoHtml(st, ngay);
   renderBaoCao(st, nv, mnv, ngay, saved.results||{}, saved.note||'', saved.checklist||'', saved.sao_override, saved.so_ngay_map||{});
-  // Fetch sao tích lũy từ Sheets (async, sẽ tự update UI khi xong)
   fetchSaoTichLuyFromSheets(st, mnv, ngay);
+}
+
+// Đồng bộ config từ Sheets (môn thi đua + chỉ tiêu), rồi load báo cáo
+async function syncConfigAndLoad(){
+  const st=document.getElementById('sel-st').value;
+  const mnv=document.getElementById('sel-nv').value;
+  const ngay=document.getElementById('sel-ngay').value;
+
+  document.getElementById('bc-body').innerHTML = `
+    <div style="margin:24px 0;padding:20px;text-align:center;color:var(--t2)">
+      <div style="font-size:24px;margin-bottom:8px;animation:spin 1s linear infinite;display:inline-block">🔄</div>
+      <div style="font-size:13px;font-weight:600">Đang đồng bộ dữ liệu từ hệ thống...</div>
+    </div>`;
+
+  try{
+    // Pull config từ Google Sheets (môn thi đua + chỉ tiêu)
+    await pullConfigFromNewSheet(st);
+    _configSynced = true;
+    activeChips.clear(); // reset chip để buildChipBar lấy đúng môn mới
+    showToast('✅ Đồng bộ xong! Môn thi đua đã cập nhật.', 2500);
+    setSyncStatus('ok','✅ Đã đồng bộ môn thi đua — '+new Date().toLocaleTimeString('vi-VN'));
+  }catch(e){
+    // Nếu không kết nối được Sheets → dùng config local, vẫn cho vào
+    _configSynced = true;
+    showToast('⚠️ Không kết nối được Sheets — dùng dữ liệu local.', 2500);
+    setSyncStatus('err','⚠️ Dùng config local');
+  }
+
+  // Gọi lại onSelNv để render bình thường
+  if(st && mnv && ngay) onSelNv();
+}
+
+// Pull môn thi đua + chỉ tiêu từ Google Sheets mới
+// Link: https://docs.google.com/spreadsheets/d/1YL6npMl6AtfSYBP1SFjRwKT4QEC3dJrRE4ww5y-Ey3M/edit?gid=1919787753
+async function pullConfigFromNewSheet(filterSt){
+  const SHEET_ID = '1YL6npMl6AtfSYBP1SFjRwKT4QEC3dJrRE4ww5y-Ey3M';
+  const GID = '1919787753';
+  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&gid=${GID}`;
+  const res = await fetch(url, {cache:'no-cache'});
+  const text = await res.text();
+  // Google trả về dạng: /*O_o*/\ngoogle.visualization.Query.setResponse({...});
+  const json = JSON.parse(text.match(/google\.visualization\.Query\.setResponse\(([\s\S]*)\)/)[1]);
+  const rows = json.table.rows;
+  const cols = json.table.cols.map(c=>c.label.trim());
+
+  // Map cột: ST | Tên môn | CT tháng | Trừ sao | +5⭐% | +10⭐% | +20⭐%
+  // (Tự động tìm cột theo tên — không phụ thuộc vào vị trí)
+  const iST    = cols.findIndex(c=>/siêu thị|ST/i.test(c));
+  const iNH    = cols.findIndex(c=>/môn|ngành|tên/i.test(c));
+  const iCT    = cols.findIndex(c=>/chỉ tiêu|target|CT/i.test(c));
+  const iTru   = cols.findIndex(c=>/trừ|tru sao/i.test(c));
+  const iPct5  = cols.findIndex(c=>/5|100%/i.test(c));
+  const iPct10 = cols.findIndex(c=>/10|120%/i.test(c));
+  const iPct20 = cols.findIndex(c=>/20|200%/i.test(c));
+
+  // Build nhMap per ST
+  const nhMap = {'TGDĐ':[], 'Topzone':[]};
+  rows.forEach(row=>{
+    const v = c => row.c[c]?.v ?? row.c[c]?.f ?? '';
+    const stCell = (iST>=0 ? String(v(iST)) : '').trim();
+    const nhCell = (iNH>=0 ? String(v(iNH)) : '').trim();
+    if(!nhCell || !stCell) return;
+    const stKey = stCell.toLowerCase().includes('topzone') ? 'Topzone' : 'TGDĐ';
+    if(filterSt && stKey !== filterSt && filterSt!=='') return;
+    const item = {
+      nh   : nhCell,
+      ct   : iCT>=0   ? (parseFloat(v(iCT))||0)   : 0,
+      tru  : iTru>=0  ? (parseInt(v(iTru))||50)    : 50,
+      sao_kd: 0,
+      pct5 : iPct5>=0 ? (parseInt(v(iPct5))||100)  : 100,
+      pct10: iPct10>=0? (parseInt(v(iPct10))||120) : 120,
+      pct20: iPct20>=0? (parseInt(v(iPct20))||200) : 200,
+    };
+    nhMap[stKey].push(item);
+  });
+
+  // Update CONFIG — chỉ cập nhật danh sách nh, giữ nguyên nv và workDays
+  ['TGDĐ','Topzone'].forEach(st=>{
+    if(nhMap[st].length > 0){
+      CONFIG[st].nh = nhMap[st];
+    }
+  });
+  saveState();
 }
 
 function getPrevDaySao(st, mnv, ngay){
@@ -2356,13 +2497,51 @@ async function fetchAllSaoTichLuyFromSheets(){
 /* ═══════════════════════════════
    CHIP BAR
 ═══════════════════════════════ */
+function _reRenderBaoCaoFromChip(st){
+  const s=st, m=document.getElementById('sel-nv').value, ng=document.getElementById('sel-ngay').value;
+  if(!s||!m||!ng) return;
+  const n=CONFIG[s].nv.find(x=>x.mnv===m);
+  const sv=LS.get(`bc:${s}:${m}:${ng}`)||{};
+  const curSoNgay=getCurrentSoNgay(s);
+  renderBaoCao(s,n,m,ng,sv.results||{},sv.note||'',sv.checklist||'',sv.sao_override,Object.assign(sv.so_ngay_map||{},curSoNgay));
+}
+
 function buildChipBar(st){
   const nhs = CONFIG[st].nh;
+  // Lần đầu: chọn tất cả môn của ST hiện tại (reset chip từ ST khác)
+  const nhSet = new Set(nhs.map(i=>i.nh));
+  // Xóa chip của ST cũ (không thuộc ST mới)
+  for(const k of [...activeChips]) if(!nhSet.has(k)) activeChips.delete(k);
   if(!activeChips.size) nhs.forEach(item=>activeChips.add(item.nh));
+
   const wrap = document.getElementById('chip-bar-wrap');
-  const bar = document.getElementById('chip-bar');
+  const bar  = document.getElementById('chip-bar');
   wrap.style.display='block';
-  bar.querySelectorAll('.chip-item,.chip-total').forEach(el=>el.remove());
+  bar.innerHTML = '';
+
+  // ── Tiêu đề + đếm ──
+  const allOn = nhs.every(i=>activeChips.has(i.nh));
+  const lbl = document.createElement('div');
+  lbl.className = 'chip-bar-lbl';
+  lbl.innerHTML = `🔽 Chọn môn thi đua báo cáo <span style="color:var(--p);font-weight:800">(${activeChips.size}/${nhs.length} môn)</span>`;
+  bar.appendChild(lbl);
+
+  // ── Nút Chọn All / Bỏ All ──
+  const btnAll = document.createElement('button');
+  btnAll.style.cssText = 'border:none;border-radius:20px;padding:4px 14px;font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;transition:all .15s;white-space:nowrap;margin-bottom:4px;'
+    + (allOn
+      ? 'background:var(--p);color:#fff;box-shadow:0 2px 8px rgba(124,110,245,.35)'
+      : 'background:var(--bg3);color:var(--t2);border:1px solid var(--bd2)');
+  btnAll.textContent = allOn ? '✅ Tất cả' : '☑ Chọn All';
+  btnAll.onclick = ()=>{
+    if(allOn) activeChips.clear();
+    else nhs.forEach(i=>activeChips.add(i.nh));
+    buildChipBar(st);
+    _reRenderBaoCaoFromChip(st);
+  };
+  bar.appendChild(btnAll);
+
+  // ── Từng chip môn ──
   nhs.forEach(item=>{
     const chip = document.createElement('span');
     chip.className='chip-item'+(activeChips.has(item.nh)?' on':'');
@@ -2370,17 +2549,10 @@ function buildChipBar(st){
     chip.onclick=()=>{
       activeChips.has(item.nh)?activeChips.delete(item.nh):activeChips.add(item.nh);
       buildChipBar(st);
-      const s=document.getElementById('sel-st').value,m=document.getElementById('sel-nv').value,ng=document.getElementById('sel-ngay').value;
-      if(s&&m&&ng){ const n=CONFIG[s].nv.find(x=>x.mnv===m); const sv=LS.get(`bc:${s}:${m}:${ng}`)||{};
-        const curSoNgay=getCurrentSoNgay(s);
-        renderBaoCao(s,n,m,ng,sv.results||{},sv.note||'',sv.checklist||'',sv.sao_override,Object.assign(sv.so_ngay_map||{},curSoNgay)); }
+      _reRenderBaoCaoFromChip(st);
     };
     bar.appendChild(chip);
   });
-  const tot = document.createElement('span');
-  tot.className='chip-total';
-  tot.textContent=`(${activeChips.size} môn)`;
-  bar.appendChild(tot);
 }
 
 /* Helper: lấy số ngày từ ngày hôm qua cho môn item, trong ngữ cảnh render hiện tại */
@@ -4475,6 +4647,171 @@ function renderStlAudit(){
     </div>`;
   });
   log.innerHTML = html;
+}
+
+/* ═══════════════════════════════
+   QL TARGET MANAGER
+═══════════════════════════════ */
+function renderQlTarget(){
+  if(currentRole !== 'ql') return;
+  const st = document.getElementById('qt-st')?.value || 'TGDĐ';
+  const nhs = CONFIG[st]?.nh || [];
+  const body = document.getElementById('qt-body');
+  if(!body) return;
+
+  // Header
+  let html = `
+  <div style="display:grid;grid-template-columns:1fr 90px 60px 60px 60px 60px 36px;gap:4px;padding:8px 10px;background:linear-gradient(135deg,var(--p),var(--p2));border-radius:var(--rad-sm);margin-bottom:6px">
+    <span style="font-size:10px;font-weight:800;color:rgba(255,255,255,.85);text-transform:uppercase">Môn thi đua</span>
+    <span style="font-size:10px;font-weight:800;color:rgba(255,255,255,.85);text-transform:uppercase;text-align:center">Target (tháng)</span>
+    <span style="font-size:10px;font-weight:800;color:rgba(255,255,255,.85);text-transform:uppercase;text-align:center">Trừ⭐</span>
+    <span style="font-size:10px;font-weight:800;color:rgba(255,255,255,.85);text-transform:uppercase;text-align:center">%100</span>
+    <span style="font-size:10px;font-weight:800;color:rgba(255,255,255,.85);text-transform:uppercase;text-align:center">%120</span>
+    <span style="font-size:10px;font-weight:800;color:rgba(255,255,255,.85);text-transform:uppercase;text-align:center">%200</span>
+    <span style="font-size:10px;font-weight:800;color:rgba(255,255,255,.85);text-transform:uppercase;text-align:center">Xóa</span>
+  </div>`;
+
+  nhs.forEach((item, idx) => {
+    html += `
+    <div style="display:grid;grid-template-columns:1fr 90px 60px 60px 60px 60px 36px;gap:4px;align-items:center;padding:8px 10px;background:var(--bg2);border:1px solid var(--bd);border-radius:var(--rad-sm);margin-bottom:4px;transition:border-color .15s" onmouseover="this.style.borderColor='var(--bd2)'" onmouseout="this.style.borderColor='var(--bd)'">
+      <div>
+        <input type="text" value="${item.nh}" id="qt-nh-${idx}"
+          style="width:100%;font-size:12px;font-weight:700;border:1.5px solid var(--bd2);border-radius:6px;padding:6px 8px;font-family:inherit;background:var(--bg3);color:var(--t1)"
+          oninput="qtSync(${idx},'nh',this.value)" placeholder="Tên môn"/>
+      </div>
+      <div style="text-align:center">
+        <input type="number" value="${item.ct}" id="qt-ct-${idx}" step="any" min="0"
+          style="width:100%;font-size:13px;font-weight:800;border:1.5px solid var(--bd2);border-radius:6px;padding:6px 4px;font-family:inherit;text-align:center;background:var(--bg3);color:var(--p)"
+          oninput="qtSync(${idx},'ct',parseFloat(this.value)||0)"/>
+      </div>
+      <div style="text-align:center">
+        <input type="number" value="${item.tru}" id="qt-tru-${idx}" step="1" min="0"
+          style="width:100%;font-size:13px;font-weight:800;border:1.5px solid var(--bd2);border-radius:6px;padding:6px 4px;font-family:inherit;text-align:center;background:var(--bg3);color:var(--r)"
+          oninput="qtSync(${idx},'tru',parseInt(this.value)||0)"/>
+      </div>
+      <div style="text-align:center">
+        <input type="number" value="${item.pct5||100}" id="qt-p5-${idx}" step="1" min="0"
+          style="width:100%;font-size:12px;font-weight:700;border:1.5px solid var(--bd2);border-radius:6px;padding:6px 4px;font-family:inherit;text-align:center;background:var(--bg3);color:var(--ora,var(--a))"
+          oninput="qtSync(${idx},'pct5',parseInt(this.value)||100)"/>
+      </div>
+      <div style="text-align:center">
+        <input type="number" value="${item.pct10||120}" id="qt-p10-${idx}" step="1" min="0"
+          style="width:100%;font-size:12px;font-weight:700;border:1.5px solid var(--bd2);border-radius:6px;padding:6px 4px;font-family:inherit;text-align:center;background:var(--bg3);color:var(--g)"
+          oninput="qtSync(${idx},'pct10',parseInt(this.value)||120)"/>
+      </div>
+      <div style="text-align:center">
+        <input type="number" value="${item.pct20||200}" id="qt-p20-${idx}" step="1" min="0"
+          style="width:100%;font-size:12px;font-weight:700;border:1.5px solid var(--bd2);border-radius:6px;padding:6px 4px;font-family:inherit;text-align:center;background:var(--bg3);color:var(--b)"
+          oninput="qtSync(${idx},'pct20',parseInt(this.value)||200)"/>
+      </div>
+      <div style="text-align:center">
+        <button onclick="qtDeleteMon(${idx})"
+          style="background:var(--r2);color:var(--r);border:1px solid rgba(255,77,109,.2);border-radius:6px;width:28px;height:28px;cursor:pointer;font-size:14px;font-weight:800;display:flex;align-items:center;justify-content:center;font-family:inherit">✕</button>
+      </div>
+    </div>`;
+  });
+
+  body.innerHTML = html;
+  const summary = document.getElementById('qt-summary');
+  if(summary) summary.textContent = `📦 ${nhs.length} môn thi đua — Chỉnh xong nhấn ☁️ Lưu & Đồng bộ NV`;
+}
+
+function qtSync(idx, field, value){
+  const st = document.getElementById('qt-st')?.value || 'TGDĐ';
+  if(!CONFIG[st]?.nh[idx]) return;
+  CONFIG[st].nh[idx][field] = value;
+}
+
+function qtAddMon(){
+  const st = document.getElementById('qt-st')?.value || 'TGDĐ';
+  if(!CONFIG[st]) return;
+  const name = prompt('Tên môn thi đua mới:');
+  if(!name || !name.trim()) return;
+  CONFIG[st].nh.push({
+    nh: name.trim(),
+    ct: 0, tru: 50, sao_kd: 0,
+    pct5: 100, pct10: 120, pct20: 200
+  });
+  renderQlTarget();
+  showToast('✅ Đã thêm môn: ' + name.trim());
+}
+
+function qtDeleteMon(idx){
+  const st = document.getElementById('qt-st')?.value || 'TGDĐ';
+  if(!CONFIG[st]?.nh[idx]) return;
+  const name = CONFIG[st].nh[idx].nh;
+  if(!confirm(`Xóa môn "${name}"?`)) return;
+  CONFIG[st].nh.splice(idx, 1);
+  renderQlTarget();
+  showToast('🗑 Đã xóa: ' + name);
+}
+
+async function qtSaveToSheets(){
+  // Đọc lại toàn bộ values từ input để chắc chắn sync
+  const st = document.getElementById('qt-st')?.value || 'TGDĐ';
+  const nhs = CONFIG[st]?.nh || [];
+  nhs.forEach((item, idx) => {
+    const nh = document.getElementById(`qt-nh-${idx}`)?.value;
+    const ct = parseFloat(document.getElementById(`qt-ct-${idx}`)?.value) || 0;
+    const tru = parseInt(document.getElementById(`qt-tru-${idx}`)?.value) || 0;
+    const p5  = parseInt(document.getElementById(`qt-p5-${idx}`)?.value) || 100;
+    const p10 = parseInt(document.getElementById(`qt-p10-${idx}`)?.value) || 120;
+    const p20 = parseInt(document.getElementById(`qt-p20-${idx}`)?.value) || 200;
+    if(nh) item.nh = nh;
+    item.ct = ct; item.tru = tru;
+    item.pct5 = p5; item.pct10 = p10; item.pct20 = p20;
+  });
+
+  saveState(); // lưu local
+  activeChips.clear();
+
+  if(!API_URL){
+    showToast('✅ Đã lưu local! Cần kết nối Sheets để NV đồng bộ.');
+    return;
+  }
+  showToast('⏳ Đang đẩy target lên Sheets...');
+  try{
+    const r = await callAPIPost('saveConfig', { config: CONFIG });
+    if(r && r.ok){
+      showToast('✅ Đồng bộ thành công! NV sẽ nhận target mới khi mở báo cáo 🎯');
+    } else {
+      showToast('⚠️ Lưu local OK — Sheets báo lỗi: ' + (r?.error||''));
+    }
+  } catch(e){
+    showToast('⚠️ Lưu local OK — Sheets lỗi: ' + e.message);
+  }
+  renderQlTarget();
+}
+
+/* ═══════════════════════════════
+   NV AUTO-PULL CONFIG KHI MỞ BÁO CÁO
+═══════════════════════════════ */
+const CONFIG_PULL_KEY = 'config_last_pull';
+const CONFIG_PULL_INTERVAL = 5 * 60 * 1000; // 5 phút pull 1 lần
+
+async function autoSyncConfigForNv(){
+  // Chỉ NV mới cần pull; QL tự quản lý
+  if(currentRole !== 'nv') return;
+  if(!API_URL) return;
+  const lastPull = LS.get(CONFIG_PULL_KEY) || 0;
+  if(Date.now() - lastPull < CONFIG_PULL_INTERVAL) return;
+  try{
+    const r = await callAPIPost('getConfig', {});
+    if(r && r.config){
+      CONFIG = r.config;
+      saveState();
+      activeChips.clear();
+      LS.set(CONFIG_PULL_KEY, Date.now());
+      // Nếu NV đang xem báo cáo, refresh lại để áp target mới
+      const selSt  = document.getElementById('sel-st')?.value;
+      const selMnv = document.getElementById('sel-nv')?.value;
+      const selNgay= document.getElementById('sel-ngay')?.value;
+      if(selSt && selMnv && selNgay){
+        onSelNv(); // re-render báo cáo với config mới
+        showToast('🔄 Target đã được cập nhật từ QL!', 3000);
+      }
+    }
+  }catch(e){ /* silent — dùng config local */ }
 }
 
 init();
