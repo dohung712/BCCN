@@ -1939,7 +1939,7 @@ let CONFIG = {
   }
 };
 let activeChips = new Set();
-let API_URL = 'https://script.google.com/macros/s/AKfycbwjiKMWRuYdvRWClNVAhZR31b8A3zLnlzhZ0JcMFowgMjpDBQeHocgWSlxsyhm4IFQayg/exec';
+let API_URL = 'https://script.google.com/macros/s/AKfycbw4Itp_0VlaY2GMfXFlZkTBAWsReslEq86eokhtx00R21k5wB33QeLCiEPQSxjAj9W2OQ/exec';
 const SHEETS_TARGET_URL = 'https://docs.google.com/spreadsheets/d/1sj-aDpw8w6aVI0BN-fPcAN1-PKP4FkQe1jC9tOoeSos/edit?gid=138751902#gid=138751902';
 
 function loadState(){
@@ -1975,15 +1975,27 @@ function showPage(p){
   });
   if(p==='sheet-nv') renderSheetNv();
   if(p==='sheet-st') renderSheetSt();
-  if(p==='bxh-sao') renderBxhSao();
-  if(p==='bxh-thidua') renderBxhThiDua();
+  if(p==='bxh-sao'){
+    if(currentRole==='ql' && API_URL){
+      const d=new Date(); d.setDate(1);
+      pullRecordsFromSheets(d.toISOString().slice(0,10), todayStr()).then(()=>renderBxhSao());
+    } else { renderBxhSao(); }
+  }
+  if(p==='bxh-thidua'){
+    if(currentRole==='ql' && API_URL){
+      const d=new Date(); d.setDate(1);
+      pullRecordsFromSheets(d.toISOString().slice(0,10), todayStr()).then(()=>renderBxhThiDua());
+    } else { renderBxhThiDua(); }
+  }
   if(p==='thuong-tru') renderThuongTru();
   if(p==='sao-tich-luy') renderSaoTichLuy();
   if(p==='phan-tich'){
     const f=document.getElementById('tk-from'),t=document.getElementById('tk-to');
     if(!f.value){ const d=new Date(); d.setDate(1); f.value=d.toISOString().slice(0,10); }
     if(!t.value) t.value=todayStr();
-    renderPhanTich();
+    if(currentRole==='ql' && API_URL){
+      pullRecordsFromSheets(f.value, t.value).then(()=>renderPhanTich());
+    } else { renderPhanTich(); }
   }
   if(p==='cai-dat') initSettings();
 }
@@ -2250,6 +2262,8 @@ async function onSelNv(){
   buildChipBar(st);
   document.getElementById('days-info-bar').innerHTML = getDaysInfoHtml(st, ngay);
   renderBaoCao(st, nv, mnv, ngay, saved.results||{}, saved.note||'', saved.checklist||'', saved.sao_override, saved.so_ngay_map||{});
+  // Fetch sao tích lũy từ Sheets (async, sẽ tự update UI khi xong)
+  fetchSaoTichLuyFromSheets(st, mnv, ngay);
 }
 
 function getPrevDaySao(st, mnv, ngay){
@@ -2260,7 +2274,7 @@ function getPrevDaySao(st, mnv, ngay){
     if(!d || d.ngay >= ngay) return;
     fromBC += (d.sao_net||0);
   });
-  // Cộng thêm sao tích lũy do QL set
+  // Cộng thêm sao tích lũy do QL set (luôn lấy từ cache đã đồng bộ)
   const fromStl = getSaoTichLuyNV(st, mnv);
   return fromBC + fromStl;
 }
@@ -2273,11 +2287,67 @@ function loadSaoDangCo(st, mnv, ngayHienTai){
     const d = LS.get(k);
     if(d && d.sao_net) fromBC += d.sao_net;
   });
-  // Sao tích lũy do QL set
+  // Sao tích lũy do QL set (từ cache local đã sync)
   const fromStl = getSaoTichLuyNV(st, mnv);
   const total = fromBC + fromStl;
   document.getElementById('sao-hien-tai').textContent = total>0 ? `★ ${total}` : '0';
   return total;
+}
+
+// Fetch sao tích lũy từ Sheets về và cache local, sau đó refresh UI
+async function fetchSaoTichLuyFromSheets(st, mnv, ngayHienTai){
+  if(!API_URL) return;
+  try{
+    const r = await callAPIPost('getSaoTichLuy', { st, mnv });
+    if(r && r.ok && typeof r.sao === 'number'){
+      // Ghi vào STL cache local để các hàm khác dùng
+      const stlData = getStlData();
+      if(!stlData[st]) stlData[st]={};
+      const now = new Date().toLocaleString('vi-VN');
+      stlData[st][mnv] = {
+        sao: r.sao,
+        updatedAt: now,
+        updatedBy: 'Sheets sync'
+      };
+      LS.set(STL_KEY, stlData);
+      // Refresh hiển thị
+      loadSaoDangCo(st, mnv, ngayHienTai);
+      // Cập nhật input sao override trong form báo cáo
+      const overrideInp = document.getElementById('sao-override-inp');
+      if(overrideInp){
+        const saoCu = getPrevDaySao(st, mnv, ngayHienTai);
+        overrideInp.value = saoCu;
+      }
+    }
+  }catch(e){ /* silent — dùng local cache */ }
+}
+
+// Pull toàn bộ sao tích lũy tất cả NV từ Sheets (QL dùng sau khi mở trang STL)
+async function fetchAllSaoTichLuyFromSheets(){
+  if(!API_URL) return;
+  const stList = ['TGDĐ','Topzone'];
+  const stlData = getStlData();
+  for(const st of stList){
+    const nvs = CONFIG[st]?.nv||[];
+    for(const nv of nvs){
+      try{
+        const r = await callAPIPost('getSaoTichLuy', { st, mnv: nv.mnv });
+        if(r && r.ok && typeof r.sao === 'number'){
+          if(!stlData[st]) stlData[st]={};
+          const cur = stlData[st][nv.mnv];
+          // Chỉ overwrite nếu Sheets có giá trị khác (ưu tiên Sheets là source of truth)
+          if(!cur || cur.updatedBy !== 'Quản lý'){
+            stlData[st][nv.mnv] = {
+              sao: r.sao,
+              updatedAt: new Date().toLocaleString('vi-VN'),
+              updatedBy: 'Sheets sync'
+            };
+          }
+        }
+      }catch(e){}
+    }
+  }
+  LS.set(STL_KEY, stlData);
 }
 
 /* ═══════════════════════════════
@@ -2867,6 +2937,31 @@ async function saveSheetStToSheets(){
 /* ═══════════════════════════════
    PHÂN TÍCH
 ═══════════════════════════════ */
+
+// Pull báo cáo từ Sheets về local cache (cho QL xem BXH/phân tích chính xác)
+async function pullRecordsFromSheets(ffrom, fto){
+  if(!API_URL) return false;
+  try{
+    setSyncStatus('loading','Đang kéo báo cáo từ Sheets...');
+    const r = await callAPIPost('getRecords', { from: ffrom, to: fto });
+    if(r && r.ok && r.records){
+      r.records.forEach(rec=>{
+        const key = `bc:${rec.st}:${rec.mnv}:${rec.ngay}`;
+        // Merge: Sheets là nguồn chính, chỉ overwrite nếu Sheets mới hơn
+        const local = LS.get(key);
+        if(!local || (rec.ts && rec.ts > (local.ts||0))){
+          LS.set(key, { ...rec, _from_sheets: true });
+        }
+      });
+      setSyncStatus('ok','✅ Đã đồng bộ '+r.records.length+' báo cáo từ Sheets');
+      return true;
+    }
+  }catch(e){
+    setSyncStatus('err','⚠️ Không kéo được Sheets: '+e.message);
+  }
+  return false;
+}
+
 function getAllLocalRecords(fst, ffrom, fto){
   const records=[];
   LS.keys('bc:').forEach(k=>{
@@ -3890,7 +3985,7 @@ function toggleQlEdit(key){
   renderQlRecords();
 }
 
-function qlSaveEdit(key){
+async function qlSaveEdit(key){
   const data = LS.get(key);
   if(!data){ showToast('❌ Không tìm thấy bản ghi'); return; }
   const nhs = CONFIG[data.st]?.nh||[];
@@ -3915,17 +4010,39 @@ function qlSaveEdit(key){
   };
   LS.set(key, updatedData);
   qlEditKey = null;
-  showToast('✅ Đã cập nhật báo cáo!');
+  showToast('💾 Đang đồng bộ lên Sheets...');
+  // Push lên Sheets để tất cả thiết bị nhận được bản cập nhật
+  if(API_URL){
+    try{
+      await callAPIPost('saveBaoCao', { record: updatedData });
+      showToast('✅ Đã sửa & đồng bộ lên Sheets! Tất cả NV nhận ngay.');
+    }catch(e){
+      showToast('✅ Đã lưu local. Sheets: '+e.message);
+    }
+  } else {
+    showToast('✅ Đã cập nhật báo cáo (chưa kết nối Sheets)!');
+  }
   renderQlRecords();
 }
 
-function qlDeleteRecord(key){
+async function qlDeleteRecord(key){
   const data = LS.get(key);
   if(!data){ showToast('❌ Không tìm thấy'); return; }
   const confirm_msg = `Xóa báo cáo của ${data.ten} ngày ${data.ngay}?`;
   if(!confirm(confirm_msg)) return;
   LS.del(key);
-  showToast('🗑 Đã xóa báo cáo!');
+  showToast('🗑 Đang xóa & đồng bộ Sheets...');
+  // Gửi record với flag deleted để Sheets xử lý xóa
+  if(API_URL){
+    try{
+      await callAPIPost('deleteBaoCao', { st: data.st, mnv: data.mnv, ngay: data.ngay });
+      showToast('✅ Đã xóa & đồng bộ Sheets! Tất cả thiết bị cập nhật.');
+    }catch(e){
+      showToast('🗑 Đã xóa local. Sheets: '+e.message);
+    }
+  } else {
+    showToast('🗑 Đã xóa báo cáo (chưa kết nối Sheets)!');
+  }
   renderQlRecords();
 }
 
@@ -3943,9 +4060,44 @@ function getStlAudit(){
   return LS.get(STL_AUDIT_KEY) || [];
 }
 
-function renderSaoTichLuy(){
+async function renderSaoTichLuy(){
   if(currentRole !== 'ql') return;
   const st = document.getElementById('stl-st')?.value||'TGDĐ';
+  const tbody = document.getElementById('stl-body');
+  if(!tbody) return;
+
+  // Hiện loading
+  tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:14px;color:var(--t3)">⏳ Đang đồng bộ từ Sheets...</td></tr>`;
+
+  // Pull từ Sheets trước để đảm bảo data mới nhất
+  if(API_URL){
+    const nvs = CONFIG[st]?.nv||[];
+    const stlData = getStlData();
+    if(!stlData[st]) stlData[st]={};
+    for(const nv of nvs){
+      try{
+        const r = await callAPIPost('getSaoTichLuy', { st, mnv: nv.mnv });
+        if(r && r.ok && typeof r.sao === 'number'){
+          // Sheets là source of truth — overwrite local nếu QL chưa đang sửa
+          const localUpdatedBy = stlData[st][nv.mnv]?.updatedBy;
+          if(localUpdatedBy !== 'Quản lý_pending'){
+            stlData[st][nv.mnv] = {
+              sao: r.sao,
+              updatedAt: new Date().toLocaleString('vi-VN'),
+              updatedBy: 'Sheets sync'
+            };
+          }
+        }
+      }catch(e){}
+    }
+    LS.set(STL_KEY, stlData);
+  }
+
+  // Render sau khi sync
+  _renderSaoTichLuyTable(st);
+}
+
+function _renderSaoTichLuyTable(st){
   const stlData = getStlData();
   const nvs = CONFIG[st]?.nv||[];
   const tbody = document.getElementById('stl-body');
@@ -3954,6 +4106,7 @@ function renderSaoTichLuy(){
   nvs.forEach((nv,i)=>{
     const rec = stlData[st]?.[nv.mnv] || {sao:0, updatedAt:'', updatedBy:''};
     const sao = rec.sao || 0;
+    const isSheetsSync = rec.updatedBy === 'Sheets sync';
     html+=`<tr>
       <td style="text-align:center;font-weight:700;color:var(--t3)">${i+1}</td>
       <td style="font-weight:600;font-size:12px">${nv.mnv}</td>
@@ -3965,7 +4118,7 @@ function renderSaoTichLuy(){
         <span style="font-size:16px;margin-left:4px">⭐</span>
       </td>
       <td style="font-size:11px;color:var(--t3)">${rec.updatedAt||'—'}</td>
-      <td style="font-size:11px;color:var(--t3)">${rec.updatedBy||'—'}</td>
+      <td style="font-size:11px;color:${isSheetsSync?'var(--g)':'var(--p)'}">${isSheetsSync?'☁️ Sheets':'✏️ '+rec.updatedBy||'—'}</td>
       <td>
         <button class="btn btn-s" style="font-size:11px;padding:5px 10px" onclick="showStlHistory('${nv.mnv}','${nv.ten}')">📋</button>
       </td>
@@ -4012,16 +4165,18 @@ async function saveSaoTichLuyToSheets(){
   while(auditLog.length > 200) auditLog.pop();
   LS.set(STL_KEY, stlData);
   LS.set(STL_AUDIT_KEY, auditLog);
-  // Đẩy lên Sheets
+
+  // Đẩy lên Sheets — gửi từng NV để Sheets lưu tập trung
   if(API_URL){
     try{
+      // Gửi toàn bộ data của ST này
       await callAPIPost('saveSaoTichLuy', { st, data: stlData[st] });
-      showToast(`✅ Đồng bộ xong! ${changed} NV thay đổi → NV nhận ngay`);
+      showToast(`✅ Đồng bộ Sheets xong! ${changed} NV thay đổi — Tất cả thiết bị nhận ngay`);
     }catch(e){
-      showToast(`✅ Lưu local OK (${changed} thay đổi). Sheets: ${e.message}`);
+      showToast(`✅ Lưu local OK (${changed} thay đổi). Sheets lỗi: ${e.message}`);
     }
   } else {
-    showToast(`✅ Đã lưu! ${changed} thay đổi — NV nhận ngay`);
+    showToast(`✅ Đã lưu local! ${changed} thay đổi — Cần kết nối Sheets để đồng bộ`);
   }
   renderSaoTichLuy();
   // Refresh sao-hien-tai nếu đang xem báo cáo
