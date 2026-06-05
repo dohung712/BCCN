@@ -4162,7 +4162,7 @@ function renderQlRecords(){
         </div>
         <div class="ql-rec-actions">
           <button class="ql-rec-edit-btn" onclick="toggleQlEdit('${key.replace(/'/g,"\\'")}')">✏️ ${isEdit?'Đang sửa':'Sửa'}</button>
-          <button class="ql-rec-del-btn" onclick="qlDeleteRecord('${key.replace(/'/g,"\\'")}')">🗑 Xóa</button>
+          ${currentRole==='ql' ? `<button class="ql-rec-del-btn" onclick="qlDeleteRecord('${key.replace(/'/g,"\\'")}')">🗑 Xóa</button>` : ''}
         </div>
       </div>
       ${isEdit ? renderQlEditForm(key, data) : ''}
@@ -4234,35 +4234,70 @@ async function qlSaveEdit(key){
   if(API_URL){
     try{
       await callAPIPost('saveBaoCao', { record: updatedData });
-      showToast('✅ Đã sửa & đồng bộ lên Sheets! Tất cả NV nhận ngay.');
+      showToast('✅ Đã sửa & đồng bộ lên Sheets! Tất cả NV nhận ngay.', 3000);
     }catch(e){
-      showToast('✅ Đã lưu local. Sheets: '+e.message);
+      showToast('✅ Đã lưu local. Sheets: '+e.message, 3000);
     }
   } else {
-    showToast('✅ Đã cập nhật báo cáo (chưa kết nối Sheets)!');
+    showToast('✅ Đã cập nhật báo cáo (chưa kết nối Sheets)!', 2500);
   }
+  // Refresh tất cả tab liên quan
+  _refreshAllRelatedTabs();
   renderQlRecords();
 }
 
 async function qlDeleteRecord(key){
+  // Chỉ QL mới được xóa
+  if(currentRole !== 'ql'){ showToast('⚠️ Chỉ Quản lý mới được xóa báo cáo!'); return; }
   const data = LS.get(key);
-  if(!data){ showToast('❌ Không tìm thấy'); return; }
-  const confirm_msg = `Xóa báo cáo của ${data.ten} ngày ${data.ngay}?`;
+  if(!data){ showToast('❌ Không tìm thấy bản ghi'); return; }
+  const confirm_msg = `Xóa báo cáo của ${data.ten} ngày ${data.ngay}?\n\nThao tác này sẽ đồng bộ xóa trên Sheets và cập nhật tất cả tab.`;
   if(!confirm(confirm_msg)) return;
+
+  // 1. Xóa local trước
   LS.del(key);
-  showToast('🗑 Đang xóa & đồng bộ Sheets...');
-  // Gửi record với flag deleted để Sheets xử lý xóa
+  showToast('🗑 Đã xóa local — đang đồng bộ Sheets...', 2000);
+
+  // 2. Đồng bộ lên Sheets
   if(API_URL){
     try{
       await callAPIPost('deleteBaoCao', { st: data.st, mnv: data.mnv, ngay: data.ngay });
-      showToast('✅ Đã xóa & đồng bộ Sheets! Tất cả thiết bị cập nhật.');
+      showToast('✅ Đã xóa & đồng bộ Sheets thành công!', 3000);
     }catch(e){
-      showToast('🗑 Đã xóa local. Sheets: '+e.message);
+      showToast('🗑 Đã xóa local. Sheets lỗi: '+e.message, 3000);
     }
   } else {
-    showToast('🗑 Đã xóa báo cáo (chưa kết nối Sheets)!');
+    showToast('🗑 Đã xóa báo cáo (chưa kết nối Sheets)!', 2500);
   }
+
+  // 3. Refresh tất cả tab liên quan
+  _refreshAllRelatedTabs();
+
+  // 4. Refresh danh sách trong modal
   renderQlRecords();
+}
+
+// Refresh tất cả tab có dữ liệu liên quan sau khi xóa / sửa
+function _refreshAllRelatedTabs(){
+  // BXH Sao
+  if(document.getElementById('page-bxh-sao')?.classList.contains('show')){
+    renderBxhSao();
+  }
+  // BXH Thi đua
+  if(document.getElementById('page-bxh-thidua')?.classList.contains('show')){
+    renderBxhThiDua();
+  }
+  // Phân tích
+  if(document.getElementById('page-phan-tich')?.classList.contains('show')){
+    renderPhanTich();
+  }
+  // Báo cáo NV (nếu đang xem đúng NV vừa bị xóa — reload để tránh stale)
+  const selSt  = document.getElementById('sel-st')?.value;
+  const selMnv = document.getElementById('sel-nv')?.value;
+  const selNgay= document.getElementById('sel-ngay')?.value;
+  if(selSt && selMnv && selNgay){
+    loadSaoDangCo(selSt, selMnv, selNgay);
+  }
 }
 
 /* ═══════════════════════════════
