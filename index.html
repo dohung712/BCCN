@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Báo Cáo Kết Quả — Topzone / TGDĐ v10</title>
+<title>Báo Cáo Kết Quả — Topzone / TGDĐ v11</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:ital,wght@0,400;0,500;0,600;0,700;0,800;1,800&family=Nunito:wght@400;600;700;800;900&family=Inter:wght@400;500;600;700;800&family=Syne:wght@400;600;700;800&family=DM+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet"/>
 <style>
@@ -304,12 +304,13 @@ a{color:var(--p);text-decoration:none}
   border:1px solid var(--bd2);
   border-radius:10px;
   padding:13px 16px;
-  font-family:inherit;font-size:16px;font-weight:700;
+  font-family:inherit;font-size:14px;font-weight:700;
   color:var(--t1);margin-bottom:12px;
-  text-align:center;letter-spacing:6px;
+  text-align:center;letter-spacing:2px;
   background:var(--bg3);
   transition:all .2s;
 }
+#login-pw{letter-spacing:6px;font-size:16px}
 .login-input:focus{
   outline:none;
   border-color:var(--p);
@@ -1040,8 +1041,11 @@ body.role-ql .ql-only-flex{display:flex}
       <button class="lrole on" onclick="setRole('nv',this)">👤 Nhân viên</button>
       <button class="lrole" onclick="setRole('ql',this)">🔑 Quản lý</button>
     </div>
-    <input class="login-input" id="login-pw" type="password" placeholder="Mật khẩu" maxlength="20" onkeyup="if(event.key==='Enter')doLogin()"/>
-    <button class="login-btn" onclick="doLogin()">Đăng nhập</button>
+    <input class="login-input" id="login-un" type="text" placeholder="Mã NV hoặc Tên đăng nhập" maxlength="30"
+    style="letter-spacing:2px;margin-bottom:10px"
+    onkeydown="if(event.key==='Enter')document.getElementById('login-pw').focus()"/>
+  <input class="login-input" id="login-pw" type="password" placeholder="Mật khẩu" maxlength="20" onkeyup="if(event.key==='Enter')doLogin()"/>
+    <button class="login-btn" id="login-btn" onclick="doLogin()">🔐 Đăng nhập</button>
     <div class="login-err" id="login-err"></div>
   </div>
 </div>
@@ -1338,13 +1342,34 @@ body.role-ql .ql-only-flex{display:flex}
   <div class="settings-card">
     <div class="settings-title">ℹ️ Thông tin</div>
     <div style="font-size:12px;color:var(--t2);line-height:1.8">
-      <b>Phiên bản:</b> 3.0 — Daily Target Edition<br/>
-      <b>Lưu trữ:</b> localStorage + Google Sheets<br/>
-      <b>URL app:</b> <span id="app-url" style="color:var(--p)">—</span>
+      <b>Phiên bản:</b> 4.0 — Secure Auth Edition (v11)<br/>
+      <b>Lưu trữ:</b> Google Sheets (Source of Truth) + localStorage cache<br/>
+      <b>URL app:</b> <span id="app-url" style="color:var(--p)">—</span><br/>
+      <b>Auth:</b> <span id="auth-mode-badge" style="color:var(--g)">v11 — Sheets Auth</span>
+      <div style="margin-top:10px;padding:10px 12px;background:var(--b2);border:1px solid var(--b);border-radius:var(--rad-sm);font-size:11px;line-height:1.8">
+        📋 <b>Setup sheet NHANVIEN:</b><br/>
+        Tạo sheet tên <b>NHANVIEN</b> trong Spreadsheet với các cột:<br/>
+        <code>EmployeeID | EmployeeName | Store | Username | Password | Role | TargetRatio</code><br/>
+        Role: <b>nv</b> hoặc <b>ql</b> · Store: <b>TGDĐ</b> hoặc <b>Topzone</b>
+      </div>
     </div>
     <div class="btn-row" style="margin-top:10px">
       <button class="btn btn-s" onclick="doLogout()">🚪 Đăng xuất</button>
     </div>
+  </div>
+</div>
+
+<!-- ══ PAGE: AUDIT LOG (QL only) ══ -->
+<div id="page-audit-log" class="page ql-only">
+  <div class="hdr">
+    <div><div class="hdr-title">AUDIT LOG</div><div class="hdr-sub">Lịch sử mọi thay đổi dữ liệu</div></div>
+  </div>
+  <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center">
+    <button class="btn btn-p" onclick="loadAuditLog()">🔄 Tải log từ Sheets</button>
+    <span style="font-size:11px;color:var(--t3)">Hiển thị 100 thay đổi gần nhất</span>
+  </div>
+  <div id="audit-log-body" style="font-size:12px">
+    <p style="color:var(--t3);padding:14px">Nhấn "Tải log" để xem lịch sử.</p>
   </div>
 </div>
 
@@ -1512,20 +1537,15 @@ body.role-ql .ql-only-flex{display:flex}
 /* ═══════════════════════════════
    CONSTANTS
 ═══════════════════════════════ */
-// Mật khẩu NV: 2 số cuối mã NV — map: mnv → {mk, st}
-const NV_ACCOUNTS = {
-  '29649':  {mk:'49', st:'TGDĐ'},
-  '204201': {mk:'01', st:'TGDĐ'},
-  '259623': {mk:'23', st:'TGDĐ'},
-  '269167': {mk:'67', st:'TGDĐ'},
-  '83089':  {mk:'89', st:'Topzone'},
-  '98486':  {mk:'86', st:'Topzone'},
-  '183180': {mk:'80', st:'Topzone'},
-  '189769': {mk:'69', st:'Topzone'},
-  '45500':  {mk:'00', st:'Topzone'},
-  '170266': {mk:'66', st:'Topzone'},
-};
-const PW_QL = '2026';
+// ════════════════════════════════════════════
+//  v11: Auth từ Google Sheets — không hardcode
+//  NV_ACCOUNTS chỉ là CACHE LOCAL sau khi đăng nhập thành công
+//  Actual auth gọi doLogin() qua Apps Script
+// ════════════════════════════════════════════
+let NV_ACCOUNTS = {}; // được populate từ Sheets sau khi login thành công
+const PW_QL = null;   // Không dùng nữa — QL cũng login qua Sheets
+let SESSION_TOKEN = null;   // JWT-like token từ Sheets
+let SESSION_USER_ID = null; // EmployeeID đang login
 // currentNvLogin lưu mnv đang đăng nhập (nếu là NV)
 let currentNvLogin = null;
 const STORAGE_KEY = 'bao_cao_v3';
@@ -1643,31 +1663,114 @@ function setRole(role, el){
   document.getElementById('login-err').textContent='';
 }
 
-function doLogin(){
+async function doLogin(){
   const pw = document.getElementById('login-pw').value.trim();
   const err = document.getElementById('login-err');
-  if(loginRoleMode==='nv'){
-    // Tìm nhân viên theo mật khẩu (2 số cuối MNV)
+  const btn = document.getElementById('login-btn');
+  if(!pw){ err.textContent='❌ Vui lòng nhập mật khẩu!'; return; }
+  
+  // Xác định username: NV nhập MNV hoặc username tùy chỉnh
+  const unEl = document.getElementById('login-un');
+  const username = unEl ? unEl.value.trim() : pw; // nếu không có input riêng, dùng MNV = pw (compat)
+
+  if(btn){ btn.textContent='⏳ Đang kiểm tra...'; btn.disabled=true; }
+  err.textContent='';
+
+  // === Nếu chưa có API URL: dùng local fallback (offline mode) ===
+  if(!API_URL){
+    _localFallbackLogin(loginRoleMode, username, pw, err, btn);
+    return;
+  }
+
+  // === Gọi Apps Script để xác thực ===
+  try {
+    const r = await callAPIPublic('login', {
+      username: username || pw,
+      password: pw,
+      role: loginRoleMode,
+    });
+    if(btn){ btn.textContent='🔐 Đăng nhập'; btn.disabled=false; }
+
+    if(r && r.ok && r.user && r.token){
+      // Lưu session
+      SESSION_TOKEN  = r.token;
+      SESSION_USER_ID= r.user.id;
+      LS.set('bc_session', { token: r.token, userId: r.user.id, role: r.user.role, ts: Date.now() });
+
+      if(r.user.role === 'nv'){
+        currentNvLogin = r.user.id;
+        // Cache thông tin NV để dùng offline
+        NV_ACCOUNTS[r.user.id] = { mk: pw, st: r.user.store, ten: r.user.name };
+        LS.set('bc_nv_login', r.user.id);
+        LS.set('bc_nv_cache_' + r.user.id, r.user);
+        enterApp('nv');
+      } else if(r.user.role === 'ql'){
+        currentNvLogin = null;
+        LS.del('bc_nv_login');
+        enterApp('ql');
+      } else {
+        err.textContent='❌ Vai trò không hợp lệ!';
+      }
+    } else {
+      err.textContent='❌ ' + (r?.error || 'Mật khẩu không đúng!');
+      document.getElementById('login-pw').value='';
+    }
+  } catch(e) {
+    if(btn){ btn.textContent='🔐 Đăng nhập'; btn.disabled=false; }
+    // Sheets không connect → offline fallback
+    console.warn('Sheets auth failed, using offline fallback:', e.message);
+    _localFallbackLogin(loginRoleMode, username, pw, err, btn);
+  }
+}
+
+// Offline fallback: dùng NV_ACCOUNTS đã cache
+function _localFallbackLogin(role, username, pw, err, btn){
+  if(role === 'nv'){
+    // Tìm trong cache
     let foundMnv = null;
-    for(const [mnv, acc] of Object.entries(NV_ACCOUNTS)){
-      if(pw === acc.mk){ foundMnv = mnv; break; }
+    const savedUser = LS.get('bc_nv_cache_' + username);
+    if(savedUser && LS.get('bc_nv_cache_pw_' + username) === pw){
+      foundMnv = username;
+    } else {
+      // Tìm theo mk (2 số cuối)
+      for(const [mnv, acc] of Object.entries(NV_ACCOUNTS)){
+        if(pw === acc.mk || pw === mnv){ foundMnv = mnv; break; }
+      }
     }
     if(foundMnv){
       currentNvLogin = foundMnv;
+      SESSION_USER_ID = foundMnv;
+      SESSION_TOKEN = 'offline_' + foundMnv; // offline token
       LS.set('bc_nv_login', foundMnv);
       enterApp('nv');
     } else {
-      err.textContent='❌ Mật khẩu không đúng!';
-      document.getElementById('login-pw').value='';
+      if(err) err.textContent='❌ Mật khẩu không đúng! (Offline mode)';
+      const pwEl = document.getElementById('login-pw');
+      if(pwEl) pwEl.value='';
     }
-  } else if(loginRoleMode==='ql' && pw===PW_QL){
-    currentNvLogin = null;
-    LS.del('bc_nv_login');
-    enterApp('ql');
-  } else {
-    err.textContent='❌ Mật khẩu không đúng!';
-    document.getElementById('login-pw').value='';
+  } else if(role === 'ql'){
+    // QL offline: check saved hash
+    const savedQlPw = LS.get('bc_ql_pw_hash');
+    if(savedQlPw && savedQlPw === _simpleHash(pw)){
+      SESSION_USER_ID = 'QL_ADMIN';
+      SESSION_TOKEN = 'offline_QL_' + pw;
+      LS.del('bc_nv_login');
+      enterApp('ql');
+    } else if(!savedQlPw){
+      // Chưa từng login online — không cho login offline để bảo mật
+      if(err) err.textContent='❌ Cần kết nối Sheets lần đầu để xác thực!';
+    } else {
+      if(err) err.textContent='❌ Mật khẩu không đúng!';
+      const pwEl = document.getElementById('login-pw');
+      if(pwEl) pwEl.value='';
+    }
   }
+  if(btn){ btn.textContent='🔐 Đăng nhập'; btn.disabled=false; }
+}
+
+function _simpleHash(s){
+  let h=0; for(let i=0;i<s.length;i++) h=Math.imul(31,h)+s.charCodeAt(i)|0;
+  return String(h);
 }
 
 function enterApp(role){
@@ -1680,20 +1783,35 @@ function enterApp(role){
   // Tự động chọn siêu thị + nhân viên nếu là NV
   if(role==='nv' && currentNvLogin){
     autoFillNvSelectors(currentNvLogin);
-    // NV: pull config mới nhất từ Sheets (silent, throttled)
     setTimeout(autoSyncConfigForNv, 800);
+  }
+  // v11: Lưu hash pw của QL để offline login (chỉ khi login online thành công)
+  if(role === 'ql' && SESSION_TOKEN && !SESSION_TOKEN.startsWith('offline_')){
+    const pwEl = document.getElementById('login-pw');
+    if(pwEl && pwEl.value) _saveQlPwHash(pwEl.value);
   }
 }
 
 function autoFillNvSelectors(mnv){
-  const acc = NV_ACCOUNTS[mnv];
+  // v11: thử lấy từ NV_ACCOUNTS (cache) hoặc nvCache trong LS
+  let acc = NV_ACCOUNTS[mnv];
+  if(!acc){
+    const cached = LS.get('bc_nv_cache_' + mnv);
+    if(cached) acc = { st: cached.store, ten: cached.name };
+  }
+  // Fallback: tìm trong CONFIG
+  if(!acc){
+    for(const st of ['TGDĐ','Topzone']){
+      const found = CONFIG[st]?.nv?.find(n=>String(n.mnv)===String(mnv));
+      if(found){ acc = { st, ten: found.ten }; break; }
+    }
+  }
   if(!acc) return;
   const selSt = document.getElementById('sel-st');
   const selNv = document.getElementById('sel-nv');
   if(!selSt || !selNv) return;
   selSt.value = acc.st;
-  onSelSt(); // populate NV list
-  // Slight delay để dropdown render xong
+  onSelSt();
   setTimeout(()=>{
     selNv.value = mnv;
     onSelNv();
@@ -1718,20 +1836,40 @@ function rebuildNav(){
 function doLogout(){
   LS.del('bc_role');
   LS.del('bc_nv_login');
+  LS.del('bc_session');
+  SESSION_TOKEN   = null;
+  SESSION_USER_ID = null;
   currentRole = null;
   currentNvLogin = null;
-  document.getElementById('login-pw').value='';
+  const pwEl = document.getElementById('login-pw');
+  const unEl = document.getElementById('login-un');
+  if(pwEl) pwEl.value='';
+  if(unEl) unEl.value='';
   document.getElementById('login-err').textContent='';
   document.getElementById('login-screen').style.display='flex';
   document.getElementById('login-screen').style.opacity='1';
 }
 
 function checkAutoLogin(){
+  // Khôi phục session token
+  const sess = LS.get('bc_session');
+  if(sess && sess.token && sess.userId){
+    SESSION_TOKEN  = sess.token;
+    SESSION_USER_ID= sess.userId;
+  }
   const saved = LS.get('bc_role');
   if(saved==='nv'||saved==='ql'){
     if(saved==='nv'){
       const savedMnv = LS.get('bc_nv_login');
-      if(savedMnv) currentNvLogin = savedMnv;
+      if(savedMnv){
+        currentNvLogin = savedMnv;
+        SESSION_USER_ID = SESSION_USER_ID || savedMnv;
+        // Khôi phục NV_ACCOUNTS cache
+        const nvCache = LS.get('bc_nv_cache_' + savedMnv);
+        if(nvCache) NV_ACCOUNTS[savedMnv] = { mk: '', st: nvCache.store, ten: nvCache.name };
+      }
+    } else if(saved === 'ql'){
+      SESSION_USER_ID = SESSION_USER_ID || 'QL_ADMIN';
     }
     enterApp(saved);
   }
@@ -2066,7 +2204,8 @@ function setSyncStatus(state, msg){
   if(lbl) lbl.textContent = msg;
 }
 
-async function callAPIPost(action, data={}){
+// callAPIPublic: dùng cho actions không cần auth (ping, login, getConfig)
+async function callAPIPublic(action, data={}) {
   if(!API_URL) throw new Error('Chưa cấu hình API URL');
   const body = JSON.stringify({ action, ...data });
   const res = await fetch(API_URL, {
@@ -2075,6 +2214,44 @@ async function callAPIPost(action, data={}){
     body
   });
   return await res.json();
+}
+
+// callAPIPost: tự động đính kèm session token
+// Nếu session hết hạn (server trả lỗi auth) → yêu cầu đăng nhập lại
+async function callAPIPost(action, data={}){
+  if(!API_URL) throw new Error('Chưa cấu hình API URL');
+  
+  // Khôi phục session từ localStorage nếu cần
+  if(!SESSION_TOKEN || !SESSION_USER_ID){
+    const saved = LS.get('bc_session');
+    if(saved && saved.token && saved.userId){
+      SESSION_TOKEN = saved.token;
+      SESSION_USER_ID = saved.userId;
+    }
+  }
+  
+  const payload = {
+    action,
+    ...data,
+    userId: SESSION_USER_ID,
+    token:  SESSION_TOKEN,
+  };
+  
+  const body = JSON.stringify(payload);
+  const res = await fetch(API_URL, {
+    method:'POST',
+    headers:{'Content-Type':'text/plain;charset=utf-8'},
+    body
+  });
+  const json = await res.json();
+  
+  // Nếu token hết hạn → force logout
+  if(json && !json.ok && json.error && json.error.includes('Phiên đăng nhập hết hạn')){
+    showToast('⚠️ Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại!', 4000);
+    setTimeout(doLogout, 1500);
+  }
+  
+  return json;
 }
 
 async function testConnection(){
@@ -2095,7 +2272,13 @@ async function testConnection(){
 
 async function pushBCToSheets(record){
   if(!API_URL) return;
-  try{ await callAPIPost('saveBaoCao', { record }); }catch(e){ console.warn('Sheets push failed:', e); }
+  try{ 
+    const r = await callAPIPost('saveBaoCao', { record });
+    if(r && !r.ok){
+      console.warn('saveBaoCao server error:', r.error);
+      showToast('⚠️ Sheets: ' + (r.error || 'Lỗi không rõ'), 3000);
+    }
+  }catch(e){ console.warn('Sheets push failed:', e); }
 }
 
 async function pullFromSheets(){
@@ -4811,6 +4994,77 @@ async function autoSyncConfigForNv(){
       }
     }
   }catch(e){ /* silent — dùng config local */ }
+}
+
+
+/* ═══════════════════════════════
+   v11: AUDIT LOG (QL)
+═══════════════════════════════ */
+async function loadAuditLog(){
+  if(currentRole !== 'ql'){ showToast('⚠️ Chỉ QL mới xem được!'); return; }
+  const body = document.getElementById('audit-log-body');
+  if(!body) return;
+  body.innerHTML = '<p style="color:var(--t2);padding:14px">⏳ Đang tải...</p>';
+  if(!API_URL){ body.innerHTML='<p style="color:var(--r);padding:14px">⚠️ Chưa kết nối Sheets</p>'; return; }
+  try{
+    const r = await callAPIPost('getLogs', { limit: 100 });
+    if(!r || !r.ok){ body.innerHTML='<p style="color:var(--r);padding:14px">Lỗi: '+(r?.error||'Unknown')+'</p>'; return; }
+    const logs = r.logs || [];
+    if(!logs.length){ body.innerHTML='<p style="color:var(--t3);padding:14px">Chưa có log nào.</p>'; return; }
+    
+    const actionColor = {
+      'LOGIN':'var(--b)', 'LOGOUT':'var(--t3)',
+      'CREATE_BAOCAO':'var(--g)', 'UPDATE_BAOCAO':'var(--a)', 'DELETE_BAOCAO':'var(--r)',
+      'UPDATE_SAO_TICH_LUY':'var(--p)', 'UPDATE_CONFIG':'var(--p)',
+      'CREATE_EMPLOYEE':'var(--g)', 'UPDATE_EMPLOYEE':'var(--a)', 'DELETE_EMPLOYEE':'var(--r)',
+    };
+    
+    let html = '';
+    logs.forEach(log => {
+      const col = actionColor[log.action] || 'var(--t2)';
+      html += `<div style="display:flex;align-items:flex-start;gap:10px;padding:9px 12px;border-bottom:1px solid var(--bd);font-size:12px">
+        <div style="flex-shrink:0;width:120px;color:var(--t3);font-size:10px;line-height:1.5">${log.ts}</div>
+        <div style="flex-shrink:0;width:80px;font-weight:700;color:var(--p)">${log.user}</div>
+        <div style="flex-shrink:0;width:160px">
+          <span style="background:${col}1a;color:${col};padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700">${log.action}</span>
+        </div>
+        <div style="flex:1;color:var(--t2);font-size:11px">
+          <b>${log.target}</b>
+          ${log.after && log.after !== 'DELETED' && log.after.length < 200 ? '<br/><span style="color:var(--t3)">→ '+log.after.slice(0,100)+'</span>' : ''}
+        </div>
+      </div>`;
+    });
+    body.innerHTML = html;
+  }catch(e){
+    body.innerHTML = '<p style="color:var(--r);padding:14px">❌ ' + e.message + '</p>';
+  }
+}
+
+/* ═══════════════════════════════
+   v11: Sau khi login thành công QL → lưu hash pw cho offline
+═══════════════════════════════ */
+function _saveQlPwHash(pw){
+  LS.set('bc_ql_pw_hash', _simpleHash(pw));
+}
+
+/* ═══════════════════════════════
+   v11: Nav tab Audit Log
+═══════════════════════════════ */
+const _origRebuildNav = rebuildNav;
+function rebuildNav(){
+  _origRebuildNav();
+  // Thêm nút Audit Log cho QL nếu chưa có
+  if(currentRole === 'ql'){
+    const nav = document.querySelector('.nav');
+    if(nav && !document.getElementById('nav-audit')){
+      const btn = document.createElement('button');
+      btn.id = 'nav-audit';
+      btn.className = 'nav-btn ql-only';
+      btn.innerHTML = '📋<br/>Audit';
+      btn.onclick = () => showPage('page-audit-log', btn);
+      nav.appendChild(btn);
+    }
+  }
 }
 
 init();
