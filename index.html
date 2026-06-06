@@ -1825,13 +1825,7 @@ function applyRole(role){
   if(badge) badge.textContent = role==='ql' ? '🔑 Quản lý' : '👤 Nhân viên';
 }
 
-function rebuildNav(){
-  const nav = document.querySelector('.nav');
-  if(!nav) return;
-  // QL: 8 tabs | NV: 3 tabs (báo cáo, BXH Sao, phân tích, cài đặt)
-  const cols = currentRole==='ql' ? 11 : 4;
-  nav.style.gridTemplateColumns = `repeat(${cols},1fr)`;
-}
+// rebuildNav được định nghĩa 1 lần duy nhất ở bên dưới
 
 function doLogout(){
   LS.del('bc_role');
@@ -2115,7 +2109,7 @@ let CONFIG = {
   }
 };
 let activeChips = new Set();
-let API_URL = 'https://script.google.com/macros/s/AKfycbyT4aL91o6RERomfx73X-V9VI8TBDzbVqNByFxIYQYrSQ9bdxS5H4cvoxGalV2yw4T-/exec';
+let API_URL = 'https://script.google.com/macros/s/AKfycbwAJmUit9kb4fEXi8CU6XY8MswYge4fUDY_JGkzyrKT0yWjPJQsaRKv61Hh60qI4W-l/exec';
 const SHEETS_TARGET_URL = 'https://docs.google.com/spreadsheets/d/1sj-aDpw8w6aVI0BN-fPcAN1-PKP4FkQe1jC9tOoeSos/edit?gid=138751902#gid=138751902';
 
 function loadState(){
@@ -2136,9 +2130,11 @@ function saveState(){
 function showPage(p){
   document.querySelectorAll('.page').forEach(el=>el.classList.remove('show'));
   document.querySelectorAll('.nav-btn').forEach(el=>el.classList.remove('active'));
-  document.getElementById('page-'+p).classList.add('show');
+  const pageEl = document.getElementById('page-'+p);
+  if(!pageEl){ console.warn('showPage: không tìm thấy page-'+p); return; }
+  pageEl.classList.add('show');
   const allPages = currentRole==='ql'
-    ? ['bao-cao','sheet-nv','sheet-st','ql-target','bxh-sao','bxh-thidua','thuong-tru','sao-tich-luy','phan-tich','cai-dat']
+    ? ['bao-cao','sheet-nv','sheet-st','ql-target','bxh-sao','bxh-thidua','thuong-tru','sao-tich-luy','phan-tich','cai-dat','audit-log']
     : ['bao-cao','bxh-sao','phan-tich','cai-dat'];
   const idx = allPages.indexOf(p);
   const btns = document.querySelectorAll('.nav-btn');
@@ -2178,14 +2174,22 @@ function showPage(p){
     } else { renderPhanTich(); }
   }
   if(p==='cai-dat') initSettings();
+  if(p==='audit-log') loadAuditLog();
 }
 
 function rebuildNav(){
   const nav = document.querySelector('.nav');
   if(!nav) return;
-  // QL: 10 tabs (without BC NV button which is modal) | NV: 4 tabs
   const cols = currentRole==='ql' ? 11 : 4;
   nav.style.gridTemplateColumns = `repeat(${cols},1fr)`;
+  if(currentRole === 'ql' && !document.getElementById('nav-audit')){
+    const btn = document.createElement('button');
+    btn.id = 'nav-audit';
+    btn.className = 'nav-btn ql-only';
+    btn.innerHTML = '📋<br/>Audit';
+    btn.onclick = () => showPage('audit-log');
+    nav.appendChild(btn);
+  }
 }
 
 function showToast(msg, duration=2400){
@@ -3144,6 +3148,8 @@ async function saveBC(){
     setSyncStatus('err','⚠️ Lưu local OK, Sheets chưa kết nối');
   });
   showToast('✅ Đã lưu thành công! Đang tạo ảnh...');
+  // Re-render lại báo cáo với data vừa lưu để Số Ngày hiển thị đúng
+  renderBaoCao(st, nv, mnv, ngay, record.results, record.note||'', record.checklist||'', record.sao_override, record.so_ngay_map||{});
   loadSaoDangCo(st,mnv,ngay);
   const s=document.getElementById('bc-status');
   if(s) s.textContent=`Lưu lúc ${new Date().toTimeString().slice(0,8)}`;
@@ -3988,13 +3994,33 @@ function drawCanvas(st,nv,mnv,ngay,nhs,results, autoSave=false){
     // Kết quả
     c.fillStyle=actual>0?'#111':'#bbb'; c.font=actual>0?'bold 13px sans-serif':'11px sans-serif';
     c.fillText(actual>0?fmt(actual):'—',480,y+22);
-    // Trống
-    const trong=!isOver?getTrongCount(st,mnv,ngay,item):0;
-    c.fillStyle=!isOver?'#ef4444':'#16a34a'; c.font='bold 10px sans-serif';
-    c.fillText(isOver?'✓':trong+' ng',540,y+21);
-    // Dùng sao
-    c.fillStyle=!isOver?'#ef4444':'#94a3b8'; c.font='bold 10px sans-serif';
-    c.fillText(!isOver?`-${item.tru}⭐`:sp||'+5⭐',590,y+22);
+    // Trống — đọc từ soNgayMap (giá trị NV đã chọn), không dùng getTrongCount
+    const iid='inp_'+item.nh.replace(/[^a-z0-9]/gi,'_');
+    const iidKey=iid; // key cho dungSaoState
+    if(isOver){
+      // Đạt ≥100% → 0 ngày (hiện ✓)
+      c.fillStyle='#16a34a'; c.font='bold 10px sans-serif';
+      c.fillText('✓',540,y+21);
+    } else {
+      // Lấy số ngày từ soNgayMap (giá trị đúng NV đã chọn/lưu), fallback về getTrongCount
+      const snVal = typeof soNgayMap[item.nh]==='number' ? soNgayMap[item.nh] : getTrongCount(st,mnv,ngay,item);
+      c.fillStyle='#ef4444'; c.font='bold 10px sans-serif';
+      c.fillText(snVal+' ng',540,y+21);
+    }
+    // Dùng sao — đọc từ dungSaoState (NV có bấm dùng sao không)
+    if(isOver){
+      c.fillStyle='#94a3b8'; c.font='bold 10px sans-serif';
+      c.fillText(sp||'+5⭐',590,y+22);
+    } else {
+      const dungSaoActive = dungSaoState[iidKey] === true;
+      if(dungSaoActive){
+        c.fillStyle='#ef4444'; c.font='bold 10px sans-serif';
+        c.fillText(`-${item.tru}⭐`,590,y+22);
+      } else {
+        c.fillStyle='#94a3b8'; c.font='10px sans-serif';
+        c.fillText('—',590,y+22);
+      }
+    }
     // Separator
     c.fillStyle='#e2e8f0'; c.fillRect(0,y+ROW-1,W,1);
   });
@@ -5048,24 +5074,8 @@ function _saveQlPwHash(pw){
 }
 
 /* ═══════════════════════════════
-   v11: Nav tab Audit Log
+   v11: Nav tab Audit Log — đã được merge vào rebuildNav() ở trên
 ═══════════════════════════════ */
-const _origRebuildNav = rebuildNav;
-function rebuildNav(){
-  _origRebuildNav();
-  // Thêm nút Audit Log cho QL nếu chưa có
-  if(currentRole === 'ql'){
-    const nav = document.querySelector('.nav');
-    if(nav && !document.getElementById('nav-audit')){
-      const btn = document.createElement('button');
-      btn.id = 'nav-audit';
-      btn.className = 'nav-btn ql-only';
-      btn.innerHTML = '📋<br/>Audit';
-      btn.onclick = () => showPage('page-audit-log', btn);
-      nav.appendChild(btn);
-    }
-  }
-}
 
 init();
 </script>
