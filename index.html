@@ -1729,6 +1729,7 @@ function previewNv(code){
   const el = document.getElementById('nv-preview');
   const q = code.trim();
   if(!q){ el.innerHTML=''; return; }
+  if(q.length < 2){ el.innerHTML=`<div style="color:var(--t3);font-size:12px;text-align:center;padding:6px">Nhập thêm số...</div>`; return; }
   const found = _findNvByCode(q);
   if(found.length === 0){
     el.innerHTML = `<div style="color:var(--t3);font-size:12px;text-align:center;padding:8px">Không tìm thấy nhân viên</div>`;
@@ -2169,7 +2170,7 @@ let CONFIG = {
   }
 };
 let activeChips = new Set();
-let API_URL = 'https://script.google.com/macros/s/AKfycbzfvY5wAypyFe8OD5Qr-AU-DliVeP4eEVXUjOO1o9N72mgiwc4-t6JdCKs4YrlG69c7/exec';
+let API_URL = 'https://script.google.com/macros/s/AKfycbwfxssQsuzRx4AkFSXDK-55WWpCT8pDOfDWUP_nGtVYxTOsWJ2OvLMvc0BdRcQMbjrP/exec';
 const SHEETS_URL_TGDD  = 'https://docs.google.com/spreadsheets/d/1YL6npMl6AtfSYBP1SFjRwKT4QEC3dJrRE4ww5y-Ey3M/edit?gid=926424567#gid=926424567';
 const SHEETS_URL_TZ    = 'https://docs.google.com/spreadsheets/d/1YL6npMl6AtfSYBP1SFjRwKT4QEC3dJrRE4ww5y-Ey3M/edit?gid=2000696213#gid=2000696213';
 const SHEETS_URL_SAO   = 'https://docs.google.com/spreadsheets/d/1YL6npMl6AtfSYBP1SFjRwKT4QEC3dJrRE4ww5y-Ey3M/edit?gid=1793741515#gid=1793741515';
@@ -2297,12 +2298,15 @@ async function callAPIPost(action, data={}){
       SESSION_USER_ID = saved.userId;
     }
   }
+
+  // Token local (login không qua Sheets) → không gửi token thật, gửi marker để server biết
+  const isLocalToken = SESSION_TOKEN && (SESSION_TOKEN.startsWith('local_'));
   
   const payload = {
     action,
     ...data,
     userId: SESSION_USER_ID,
-    token:  SESSION_TOKEN,
+    token:  isLocalToken ? '' : SESSION_TOKEN,
   };
   
   const body = JSON.stringify(payload);
@@ -2447,6 +2451,11 @@ function toggleDungSao(iid){
   }
 
   dungSaoState[iid] = !dungSaoState[iid];
+  // Nếu vừa bật dùng sao → reset hidden input số ngày về 0 ngay
+  if(dungSaoState[iid]){
+    const snEl = document.getElementById('sn_'+iid);
+    if(snEl) snEl.value = 0;
+  }
   const nv=CONFIG[st].nv.find(n=>n.mnv===mnv);
   const saved=LS.get(`bc:${st}:${mnv}:${ngay}`)||{};
   const curResults = getCurrentResults(st);
@@ -2454,8 +2463,29 @@ function toggleDungSao(iid){
   renderBaoCao(st, nv, mnv, ngay, curResults, saved.note||'', saved.checklist||'', saved.sao_override, curSoNgay);
 }
 
+function setSoNgay(iid, val){
+  const inp = document.getElementById('sn_'+iid);
+  if(!inp) return;
+  const cur = parseInt(inp.value)||0;
+  // Click lại cùng số → toggle về 0
+  const newVal = cur === val ? 0 : val;
+  inp.value = newVal;
+  // Re-render các nút trong cùng row để phản ánh selection mới
+  const row = document.getElementById('row_'+iid);
+  if(row){
+    const SN_COLORS = {0:'#94a3b8', 1:'#22c55e', 2:'#f59e0b', 3:'#ef4444', 4:'#8b5cf6'};
+    row.querySelectorAll('[data-sn-btn]').forEach(btn => {
+      const n = parseInt(btn.dataset.snBtn);
+      const col = SN_COLORS[n];
+      const active = n === newVal;
+      btn.style.background = active ? col : 'transparent';
+      btn.style.color = active ? '#fff' : col;
+    });
+  }
+  onInputChange();
+}
+
 function onSoNgayChange(iid){
-  // Cập nhật cảnh báo live nếu cần
   onInputChange();
 }
 
@@ -2745,56 +2775,59 @@ function getPrevDaySao(st, mnv, ngay){
 }
 
 function loadSaoDangCo(st, mnv, ngayHienTai){
-  // Sao lũy kế = tổng tất cả ngày đã lưu (bao gồm cả hôm nay nếu đã lưu)
-  let fromBC=0;
+  // Ước tính local: chỉ tính tháng hiện tại (khớp logic GAS getSaoLuyKe)
+  const thangHienTai = (ngayHienTai||new Date().toISOString().slice(0,10)).slice(0,7); // 'yyyy-MM'
+  let fromBC = 0;
   LS.keys(`bc:${st}:${mnv}:`).forEach(k=>{
     const d = LS.get(k);
-    if(d && d.sao_net) fromBC += d.sao_net;
+    if(!d) return;
+    // Chỉ tính báo cáo trong tháng hiện tại
+    const ngayBC = (d.ngay||k.split(':')[3]||'').slice(0,7);
+    if(ngayBC !== thangHienTai) return;
+    // Ưu tiên sao_override nếu có (khớp với GAS)
+    if(d.sao_override !== undefined && d.sao_override !== null && d.sao_override !== '')
+      fromBC += parseFloat(d.sao_override) || 0;
+    else
+      fromBC += d.sao_net || 0;
   });
-  // Sao tích lũy do QL set (từ cache local đã sync)
+  // Sao tích lũy đầu tháng do QL set (từ cache local đã sync)
   const fromStl = getSaoTichLuyNV(st, mnv);
-  const total = fromBC + fromStl;
-  // Cập nhật lũy kế (local estimate; sẽ overwrite khi fetch từ Sheets xong)
+  const total = Math.round((fromBC + fromStl) * 100) / 100;
+  // Cập nhật lũy kế (local estimate; sẽ overwrite khi getSaoLuyKe từ Sheets về)
   const lkEl = document.getElementById('sao-luy-ke');
-  if(lkEl) lkEl.textContent = total > 0 ? total : '0';
+  if(lkEl) lkEl.textContent = total;
   return total;
 }
 
-// Fetch sao tích lũy từ Sheets về và cache local, sau đó refresh UI
+// Fetch sao lũy kế từ Sheets (getSaoLuyKe = STL đầu tháng + BC tháng này)
+// Đây là nguồn chính xác duy nhất — NV và QL đều thấy cùng số
 async function fetchSaoTichLuyFromSheets(st, mnv, ngayHienTai){
   if(!API_URL) return;
   try{
-    const r = await callAPIPost('getSaoTichLuy', { st, mnv });
-    if(r && r.ok && typeof r.sao === 'number'){
-      // Ghi vào STL cache local để các hàm khác dùng
-      const stlData = getStlData();
-      if(!stlData[st]) stlData[st]={};
-      const now = new Date().toLocaleString('vi-VN');
-      stlData[st][mnv] = {
-        sao: r.sao,
-        updatedAt: now,
-        updatedBy: 'Sheets sync'
-      };
-      LS.set(STL_KEY, stlData);
-      // Refresh hiển thị
-      loadSaoDangCo(st, mnv, ngayHienTai);
-      // Cập nhật sao lũy kế trong form báo cáo nếu đang mở
+    // Dùng getSaoLuyKe — đã tính đủ: saoTL (QL set) + saoBC (BaoCao tháng này trên Sheets)
+    const lk = await callAPIPost('getSaoLuyKe', { st, mnv });
+    if(lk && lk.ok){
+      // Cache STL đầu tháng về local để loadSaoDangCo dùng khi offline
+      if(typeof lk.saoTL === 'number'){
+        const stlData = getStlData();
+        if(!stlData[st]) stlData[st]={};
+        stlData[st][mnv] = {
+          sao: lk.saoTL,
+          updatedAt: new Date().toLocaleString('vi-VN'),
+          updatedBy: 'Sheets sync'
+        };
+        LS.set(STL_KEY, stlData);
+      }
+      // Cập nhật UI lũy kế (meta-bar và form báo cáo)
+      const lkEl = document.getElementById('sao-luy-ke');
+      if(lkEl) lkEl.textContent = lk.luyKe;
       const bcEl = document.getElementById('sao-luy-ke-bc');
       if(bcEl){
-        const lkEl = document.getElementById('sao-luy-ke');
-        if(lkEl) bcEl.textContent = lkEl.textContent;
+        bcEl.textContent = lk.luyKe;
         onInputChange();
       }
     }
-  }catch(e){ /* silent — dùng local cache */ }
-  // Fetch lũy kế từ Sheets để hiển thị chính xác
-  try{
-    const lk = await callAPIPost('getSaoLuyKe', { st, mnv });
-    if(lk && lk.ok){
-      const lkEl = document.getElementById('sao-luy-ke');
-      if(lkEl) lkEl.textContent = lk.luyKe;
-    }
-  }catch(e){}
+  }catch(e){ /* silent — giữ ước tính local */ }
 }
 
 // Pull toàn bộ sao tích lũy tất cả NV từ Sheets (QL dùng sau khi mở trang STL)
@@ -2978,23 +3011,45 @@ function rowHtml(item, ct_nv, actual, pct, trong, savedSoNgay, savedDungSao, sao
 
   // Số ngày
   const isOver100 = pct >= (item.pct5||100)/100;
+  // Dùng sao active → force 0
+  const _forcedZero = isOver100 || (savedDungSao === true);
   let soNgayVal;
-  let soNgayIsAuto = false;
-  if(typeof savedSoNgay === 'number'){
+  if(_forcedZero){
+    soNgayVal = 0;
+  } else if(typeof savedSoNgay === 'number' && savedSoNgay > 0){
     soNgayVal = savedSoNgay;
   } else {
-    soNgayVal = _getPrevSoNgay(item);
-    soNgayIsAuto = soNgayVal > 0;
+    soNgayVal = _getPrevSoNgay(item) || 0;
   }
-  if(isOver100) soNgayVal = 0; // đạt rồi → số ngày = 0
-  const canhBaoHtml = canhBaoNgay ? `<div style="font-size:9px;color:var(--r);font-weight:700;margin-top:2px;text-align:center">⚠️ Check lại</div>` : '';
-  const snBorderColor = canhBaoNgay ? 'var(--r)' : soNgayIsAuto ? 'var(--a)' : 'var(--bd2)';
-  const snColor = soNgayIsAuto ? 'var(--a)' : 'var(--t1)';
-  const soNgayHtml = isOver100
-    ? `<div style="text-align:center;font-size:11px;font-weight:700;color:var(--g)">0</div>`
-    : `<div><input type="number" id="sn_${iid}" value="${soNgayVal}" min="0" step="1"
-        oninput="onSoNgayChange('${iid}')"
-        style="width:100%;font-size:13px;font-weight:800;border:1.5px solid ${snBorderColor};border-radius:5px;padding:4px 3px;background:var(--bg2);color:${snColor};font-family:inherit;text-align:center"/>${canhBaoHtml}</div>`;
+
+  // Màu cho từng số ngày
+  const SN_COLORS = {0:'#94a3b8', 1:'#22c55e', 2:'#f59e0b', 3:'#ef4444', 4:'#8b5cf6'};
+  const snColor = SN_COLORS[soNgayVal] || '#94a3b8';
+
+  let soNgayHtml;
+  if(_forcedZero){
+    // >100% hoặc dùng sao → hiện 0 tĩnh, màu xanh lá (tốt) hoặc xám
+    const zeroColor = isOver100 ? '#22c55e' : '#94a3b8';
+    soNgayHtml = `<div style="text-align:center;font-size:13px;font-weight:800;color:${zeroColor};padding:4px 0">0</div>
+      <input type="hidden" id="sn_${iid}" value="0"/>`;
+  } else {
+    // Hiện 4 nút bấm: 1 2 3 4
+    const btns = [1,2,3,4].map(n => {
+      const active = soNgayVal === n;
+      const col = SN_COLORS[n];
+      return `<div data-sn-btn="${n}" onclick="setSoNgay('${iid}',${n})" style="
+        flex:1;text-align:center;cursor:pointer;padding:4px 0;border-radius:5px;
+        font-size:12px;font-weight:800;line-height:1.2;
+        background:${active ? col : 'transparent'};
+        color:${active ? '#fff' : col};
+        border:1.5px solid ${col};
+        transition:all .12s">${n}</div>`;
+    }).join('');
+    soNgayHtml = `<div style="display:flex;gap:2px;align-items:center">
+      ${btns}
+    </div>
+    <input type="hidden" id="sn_${iid}" value="${soNgayVal}"/>`;
+  }
 
   // Cột "Trừ Sao": icon hiện số sao trừ, nhấn để toggle; nhấn lại để reset số ngày về 0
   const dungSaoActive = savedDungSao === true;
@@ -3275,17 +3330,7 @@ function onInputChange(){
     }
     const chkEl=row.querySelector('input[type=checkbox]');
     if(chkEl) chkEl.checked=pct>=pctThresh;
-    // Nếu vừa đạt >100% → disable soNgay (không reset giá trị)
-    const snEl=document.getElementById('sn_'+iid);
-    if(snEl){
-      if(pct>=pctThresh){
-        snEl.disabled=true;
-        snEl.style.opacity='.4';
-      } else {
-        snEl.disabled=false;
-        snEl.style.opacity='';
-      }
-    }
+    // soNgay được kiểm soát bởi rowHtml (nút bấm) — không cần xử lý ở đây
   });
 }
 
@@ -3315,7 +3360,11 @@ async function saveBC(){
   }
 
   const saoCu = getSaoCuFromUI();
+  // Tính sao_override: chỉ lưu nếu user đã chỉnh tay (khác với auto)
+  const saoCuAuto = getPrevDaySao(st, mnv, ngay);
+  const sao_override = (saoCu !== saoCuAuto) ? saoCu : undefined;
   const record={st,mnv,ten:nv.ten,ngay,results,sao_duong:saoDuong,sao_am:saoAm,sao_net:net,note,checklist,ts:Date.now()};
+  if(sao_override !== undefined) record.sao_override = sao_override;
   record.so_ngay_map = getCurrentSoNgay(st);
   record.dung_sao_map = {...dungSaoState};
   if(thuongThem > 0) record.results['__thuong_them__'] = thuongThem;
@@ -3333,7 +3382,7 @@ async function saveBC(){
   if(s) s.textContent=`Lưu lúc ${new Date().toTimeString().slice(0,8)}`;
   setTimeout(()=>{
     try{
-      drawCanvas(st,nv,mnv,ngay,CONFIG[st].nh,results, true, record.so_ngay_map);
+      drawCanvas(st,nv,mnv,ngay,CONFIG[st].nh,results, true, record.so_ngay_map, record.dung_sao_map);
       showToast('📷 Đã lưu & xuất ảnh tự động!', 3000);
     }catch(e){ console.warn('Auto export img error:', e); }
   }, 400);
@@ -3374,9 +3423,21 @@ function collectSheetNv(){
 }
 async function saveSheetNvToSheets(){
   collectSheetNv(); saveState();
-  showToast('Đang lưu...');
-  if(API_URL){ try{ await callAPIPost('saveConfig',{config:CONFIG}); showToast('✅ Đã lưu lên Google Sheets!'); }catch(e){ showToast('⚠️ Lưu local OK. Sheets: '+e.message); } }
-  else showToast('✅ Đã lưu local (chưa kết nối Sheets)');
+  const st = document.getElementById('sheet-nv-st').value;
+  const count = CONFIG[st].nv.length;
+  showToast('⏳ Đang lưu danh sách nhân viên...');
+  if(API_URL){
+    try{
+      await callAPIPost('saveConfig',{config:CONFIG});
+      showToast(`✅ Đã lưu & đồng bộ lên Sheets! ${count} NV · ${st}`, 3500);
+      // Cập nhật badge số NV trên giao diện nếu có
+      renderSheetNv();
+    }catch(e){
+      showToast('⚠️ Lưu local OK — Sheets lỗi: '+e.message, 3500);
+    }
+  } else {
+    showToast(`✅ Đã lưu local! ${count} NV · ${st} (Chưa kết nối Sheets)`, 3000);
+  }
 }
 
 /* ═══════════════════════════════
@@ -3488,10 +3549,21 @@ async function saveSheetStToSheets(){
   CONFIG[st].workDays=wd;
   collectSheetSt();
   saveState(); activeChips.clear();
+  const count = CONFIG[st].nh.length;
   // Tự động đồng bộ với Thưởng/Trừ sao (cùng dùng CONFIG[st].nh)
   if(document.getElementById('page-thuong-tru')?.classList.contains('show')) renderThuongTru();
-  if(API_URL){ try{ await callAPIPost('saveConfig',{config:CONFIG}); showToast('✅ Đã lưu lên Sheets! Đồng bộ T/T Sao tự động.'); }catch(e){ showToast('⚠️ Lưu local OK'); } }
-  else showToast('✅ Đã lưu local — Đồng bộ T/T Sao tự động');
+  showToast('⏳ Đang lưu danh sách môn thi đua...');
+  if(API_URL){
+    try{
+      await callAPIPost('saveConfig',{config:CONFIG});
+      showToast(`✅ Đã lưu & đồng bộ lên Sheets! ${count} môn · ${st} · T/T Sao đã cập nhật`, 3500);
+      renderSheetSt();
+    }catch(e){
+      showToast('⚠️ Lưu local OK — Sheets lỗi: '+e.message, 3500);
+    }
+  } else {
+    showToast(`✅ Đã lưu local! ${count} môn · ${st} (Chưa kết nối Sheets)`, 3000);
+  }
 }
 
 /* ═══════════════════════════════
@@ -4032,13 +4104,13 @@ function exportImg(){
   if(hasAlert){
     showToast('⚠️ Có môn Số Ngày ≥4 — ảnh sẽ có thông báo tag Quản lý!', 3500);
   }
-  drawCanvas(st,nv,mnv,ngay,CONFIG[st].nh,results,false,soNgayMap);
+  drawCanvas(st,nv,mnv,ngay,CONFIG[st].nh,results,false,soNgayMap,{...dungSaoState});
 }
 
-function drawCanvas(st,nv,mnv,ngay,nhs,results, autoSave=false, soNgayMap=null){
+function drawCanvas(st,nv,mnv,ngay,nhs,results, autoSave=false, soNgayMap=null, dungSaoMap=null){
   // ── Kiểm tra có môn nào Số Ngày >= 4 không ──
-  // Ưu tiên soNgayMap được truyền vào; fallback đọc từ DOM
   if(!soNgayMap) soNgayMap = getCurrentSoNgay(st);
+  if(!dungSaoMap) dungSaoMap = {...dungSaoState};
   // Nếu map từ DOM toàn 0, thử đọc từ record đã lưu
   const hasAnyValue = Object.values(soNgayMap).some(v => v > 0);
   if(!hasAnyValue){
@@ -4183,11 +4255,14 @@ function drawCanvas(st,nv,mnv,ngay,nhs,results, autoSave=false, soNgayMap=null){
     // Kết quả
     c.fillStyle=actual>0?'#111':'#bbb'; c.font=actual>0?'bold 13px sans-serif':'11px sans-serif';
     c.fillText(actual>0?fmt(actual):'—',480,y+22);
-    // Trống — dùng giá trị "Số Ngày" user đã chọn (soNgayMap), fallback getTrongCount
+    // Số ngày — màu theo giá trị (0=xám, 1=xanh lá, 2=cam, 3=đỏ, 4=tím)
     const snVal = soNgayMap?.[item.nh];
-    const trong = isOver ? 0 : (typeof snVal === 'number' ? snVal : getTrongCount(st,mnv,ngay,item));
-    c.fillStyle=!isOver?'#ef4444':'#16a34a'; c.font='bold 10px sans-serif';
-    c.fillText(isOver?'✓':trong+' ng',540,y+21);
+    const dungSao = dungSaoMap?.[('inp_'+item.nh.replace(/[^a-z0-9]/gi,'_'))];
+    const trong = (isOver || dungSao) ? 0 : (typeof snVal === 'number' ? snVal : 0);
+    const SN_CANVAS_COLORS = {0:'#16a34a', 1:'#22c55e', 2:'#f59e0b', 3:'#ef4444', 4:'#8b5cf6'};
+    const snCanvasColor = isOver ? '#16a34a' : (SN_CANVAS_COLORS[trong] || '#94a3b8');
+    c.fillStyle = snCanvasColor; c.font='bold 11px sans-serif';
+    c.fillText(isOver ? '✓' : (trong > 0 ? trong + ' ng' : '0'), 540, y+21);
     // Dùng sao
     c.fillStyle=!isOver?'#ef4444':'#94a3b8'; c.font='bold 10px sans-serif';
     c.fillText(!isOver?`-${item.tru}⭐`:sp||'+5⭐',590,y+22);
