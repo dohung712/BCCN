@@ -2575,56 +2575,82 @@ async function syncConfigAndLoad(){
   if(st && mnv && ngay) onSelNv();
 }
 
-// Pull môn thi đua + chỉ tiêu từ Google Sheets mới
-// Link: https://docs.google.com/spreadsheets/d/1YL6npMl6AtfSYBP1SFjRwKT4QEC3dJrRE4ww5y-Ey3M/edit?gid=1919787753
+// Pull môn thi đua + chỉ tiêu từ Google Sheets
+// Tab Target_TGDD (gid=926424567) và Target_Topzone (gid=2000696213)
+// Cấu trúc mỗi tab:
+//   Hàng đầu: NHÂN VIÊN / STT / Ngành hàng / Chỉ tiêu cả ST / Trừ sao / Sao KD
+//   Dữ liệu ngành hàng bắt đầu sau hàng header "STT | Ngành hàng | ..."
 async function pullConfigFromNewSheet(filterSt){
   const SHEET_ID = '1YL6npMl6AtfSYBP1SFjRwKT4QEC3dJrRE4ww5y-Ey3M';
-  const GID = '1919787753';
-  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&gid=${GID}`;
-  const res = await fetch(url, {cache:'no-cache'});
-  const text = await res.text();
-  // Google trả về dạng: /*O_o*/\ngoogle.visualization.Query.setResponse({...});
-  const json = JSON.parse(text.match(/google\.visualization\.Query\.setResponse\(([\s\S]*)\)/)[1]);
-  const rows = json.table.rows;
-  const cols = json.table.cols.map(c=>c.label.trim());
+  const TABS = [
+    { st: 'TGDĐ',    gid: '926424567'  },
+    { st: 'Topzone', gid: '2000696213' },
+  ];
 
-  // Map cột: ST | Tên môn | CT tháng | Trừ sao | +5⭐% | +10⭐% | +20⭐%
-  // (Tự động tìm cột theo tên — không phụ thuộc vào vị trí)
-  const iST    = cols.findIndex(c=>/siêu thị|ST/i.test(c));
-  const iNH    = cols.findIndex(c=>/môn|ngành|tên/i.test(c));
-  const iCT    = cols.findIndex(c=>/chỉ tiêu|target|CT/i.test(c));
-  const iTru   = cols.findIndex(c=>/trừ|tru sao/i.test(c));
-  const iPct5  = cols.findIndex(c=>/5|100%/i.test(c));
-  const iPct10 = cols.findIndex(c=>/10|120%/i.test(c));
-  const iPct20 = cols.findIndex(c=>/20|200%/i.test(c));
+  for(const tab of TABS){
+    if(filterSt && filterSt !== '' && filterSt !== tab.st) continue;
+    try{
+      const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&gid=${tab.gid}`;
+      const res  = await fetch(url, {cache:'no-cache'});
+      const text = await res.text();
+      const json = JSON.parse(text.match(/google\.visualization\.Query\.setResponse\(([\s\S]*)\)/)[1]);
+      const rows = json.table.rows;
 
-  // Build nhMap per ST
-  const nhMap = {'TGDĐ':[], 'Topzone':[]};
-  rows.forEach(row=>{
-    const v = c => row.c[c]?.v ?? row.c[c]?.f ?? '';
-    const stCell = (iST>=0 ? String(v(iST)) : '').trim();
-    const nhCell = (iNH>=0 ? String(v(iNH)) : '').trim();
-    if(!nhCell || !stCell) return;
-    const stKey = stCell.toLowerCase().includes('topzone') ? 'Topzone' : 'TGDĐ';
-    if(filterSt && stKey !== filterSt && filterSt!=='') return;
-    const item = {
-      nh   : nhCell,
-      ct   : iCT>=0   ? (parseFloat(v(iCT))||0)   : 0,
-      tru  : iTru>=0  ? (parseInt(v(iTru))||50)    : 50,
-      sao_kd: 0,
-      pct5 : iPct5>=0 ? (parseInt(v(iPct5))||100)  : 100,
-      pct10: iPct10>=0? (parseInt(v(iPct10))||120) : 120,
-      pct20: iPct20>=0? (parseInt(v(iPct20))||200) : 200,
-    };
-    nhMap[stKey].push(item);
-  });
+      // Tìm hàng header chứa "Ngành hàng" hoặc "STT"
+      // (sheet có vài hàng NHÂN VIÊN phía trên)
+      let headerRowIdx = -1;
+      // Cột B (index 1) = STT/Ngành, Cột C = Chỉ tiêu, Cột D = Trừ sao, Cột E = Sao KD
+      // Tìm hàng có cell B = "STT" hoặc "Ngành hàng"
+      for(let i=0;i<rows.length;i++){
+        const r = rows[i];
+        const b = r.c?.[1]?.v ?? r.c?.[1]?.f ?? '';
+        if(typeof b === 'string' && /STT|ngành/i.test(b)){
+          headerRowIdx = i;
+          break;
+        }
+      }
 
-  // Update CONFIG — chỉ cập nhật danh sách nh, giữ nguyên nv và workDays
-  ['TGDĐ','Topzone'].forEach(st=>{
-    if(nhMap[st].length > 0){
-      CONFIG[st].nh = nhMap[st];
+      // Lấy dữ liệu từ hàng sau header
+      const startRow = headerRowIdx >= 0 ? headerRowIdx + 1 : 0;
+      const nhList = [];
+
+      for(let i = startRow; i < rows.length; i++){
+        const r = rows[i];
+        const getV = idx => r.c?.[idx]?.v ?? r.c?.[idx]?.f ?? null;
+        // Cột A=index0: (trống hoặc số thứ tự)
+        // Cột B=index1: STT (số)
+        // Cột C=index2: Tên ngành hàng (text)  ← dùng cột này
+        // Cột D=index3: Chỉ tiêu cả ST
+        // Cột E=index4: Trừ sao
+        // Cột F=index5: Sao KD (thường = 0, bỏ qua)
+        const stt  = getV(1);
+        const name = getV(2);
+        const ct   = getV(3);
+        const tru  = getV(4);
+        if(!name || typeof name !== 'string' || !name.trim()) continue;
+        if(stt === null && ct === null) continue; // hàng trống
+
+        // Giữ lại ngưỡng thưởng từ config hiện tại nếu có (không có trong sheet)
+        const existing = (CONFIG[tab.st]?.nh || []).find(x=>x.nh===name.trim());
+        nhList.push({
+          nh    : name.trim(),
+          ct    : parseFloat(ct) || 0,
+          tru   : parseInt(tru)  || 50,
+          sao_kd: 0,
+          pct5  : existing?.pct5  ?? 100,
+          pct10 : existing?.pct10 ?? 120,
+          pct20 : existing?.pct20 ?? 200,
+        });
+      }
+
+      if(nhList.length > 0){
+        CONFIG[tab.st].nh = nhList;
+        console.log(`✅ Pulled ${nhList.length} môn từ tab ${tab.st}:`, nhList.map(x=>x.nh));
+      }
+    }catch(e){
+      console.warn(`⚠️ Lỗi fetch tab ${tab.st}:`, e);
     }
-  });
+  }
   saveState();
 }
 
