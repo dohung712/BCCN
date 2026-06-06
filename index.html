@@ -1861,37 +1861,29 @@ function doLogout(){
   document.getElementById('login-screen').style.opacity='1';
 }
 
-const SESSION_EXPIRE_MS = 72 * 60 * 60 * 1000; // 72 giờ (3 ngày)
+
 
 function checkAutoLogin(){
-  // Khôi phục session token — chỉ nếu chưa hết 72h
+  // Khôi phục session — không check expire, login local không hết hạn
   const sess = LS.get('bc_session');
   if(sess && sess.token && sess.userId){
-    const age = Date.now() - (sess.ts || 0);
-    if(age < SESSION_EXPIRE_MS){
-      SESSION_TOKEN  = sess.token;
-      SESSION_USER_ID= sess.userId;
-      // Refresh ts để tránh watcher logout ngay sau khi restore
-      LS.set('bc_session', { ...sess, ts: Date.now() });
-    } else {
-      // Session đã quá 72h → xóa, bắt đăng nhập lại
-      LS.del('bc_session');
-      LS.del('bc_role');
-      LS.del('bc_nv_login');
-      return; // không auto-login
-    }
+    SESSION_TOKEN   = sess.token;
+    SESSION_USER_ID = sess.userId;
   }
   const saved = LS.get('bc_role');
   if(saved==='nv'||saved==='ql'){
     if(saved==='nv'){
       const savedMnv = LS.get('bc_nv_login');
       if(savedMnv){
-        currentNvLogin = savedMnv;
+        currentNvLogin  = savedMnv;
         SESSION_USER_ID = SESSION_USER_ID || savedMnv;
-        const nvCache = LS.get('bc_nv_cache_' + savedMnv);
-        if(nvCache) NV_ACCOUNTS[savedMnv] = { mk: '', st: nvCache.store, ten: nvCache.name };
+        // Tự fill siêu thị từ CONFIG
+        for(const st of ['TGDĐ','Topzone']){
+          const nv = CONFIG[st]?.nv?.find(n=>String(n.mnv)===String(savedMnv));
+          if(nv){ NV_ACCOUNTS[savedMnv] = { mk:'', st, ten: nv.ten }; break; }
+        }
       }
-    } else if(saved === 'ql'){
+    } else if(saved==='ql'){
       SESSION_USER_ID = SESSION_USER_ID || 'QL_ADMIN';
     }
     enterApp(saved);
@@ -1899,17 +1891,7 @@ function checkAutoLogin(){
 }
 
 // Tự động kiểm tra session hết hạn mỗi phút
-function startSessionWatcher(){
-  setInterval(()=>{
-    const sess = LS.get('bc_session');
-    if(!sess || !sess.ts) return;
-    const age = Date.now() - sess.ts;
-    if(age >= SESSION_EXPIRE_MS && currentRole){
-      showToast('⏰ Phiên đăng nhập đã hết hạn (72h). Vui lòng đăng nhập lại.', 4000);
-      setTimeout(doLogout, 1500);
-    }
-  }, 30 * 60 * 1000); // kiểm tra mỗi 30 phút
-}
+function startSessionWatcher(){ /* disabled — login local không hết hạn */ }
 
 /* ═══════════════════════════════
    THEMES
@@ -2291,16 +2273,7 @@ async function callAPIPost(action, data={}){
   });
   const json = await res.json();
   
-  // Nếu token hết hạn → thông báo nhưng không tự logout (user tự quyết)
-  if(json && !json.ok && json.error && json.error.includes('Phiên đăng nhập hết hạn')){
-    showToast('⚠️ Token hết hạn — đang làm mới phiên. Vui lòng thử lại!', 4000);
-    // Xóa token cũ để lần sau callAPIPost không gửi token hết hạn
-    SESSION_TOKEN = null;
-    SESSION_USER_ID = null;
-    LS.del('bc_session');
-    // Không doLogout() tự động — chỉ redirect về màn hình login khi user tương tác
-    setTimeout(doLogout, 3000);
-  }
+  // Bỏ qua lỗi token từ server — login local không phụ thuộc Sheets auth
   
   return json;
 }
@@ -4253,7 +4226,7 @@ function init(){
   if(API_URL) setSyncStatus('idle','Đã cấu hình — nhấn 🔄 để kiểm tra');
   checkAutoLogin();
   rebuildNav();
-  startSessionWatcher(); // tự động logout sau 24h
+  startSessionWatcher();
   // Polling sao tích lũy mỗi 60 giây — đảm bảo NV luôn nhận sao QL cập nhật
   setInterval(autoSyncSaoTichLuy, 60000);
 }
