@@ -1694,7 +1694,7 @@ async function doLogin(){
     if(btn){ btn.textContent='🔐 Đăng nhập'; btn.disabled=false; }
 
     if(r && r.ok && r.user && r.token){
-      // Lưu session kèm timestamp để kiểm tra hết hạn 24h
+      // Lưu session kèm timestamp để kiểm tra hết hạn 72h
       SESSION_TOKEN  = r.token;
       SESSION_USER_ID= r.user.id;
       const sessionData = { token: r.token, userId: r.user.id, role: r.user.role, ts: Date.now() };
@@ -1707,6 +1707,8 @@ async function doLogin(){
         LS.set('bc_nv_cache_' + r.user.id, r.user);
         enterApp('nv');
       } else if(r.user.role === 'ql'){
+        // Lưu hash pw QL ngay tại đây — trước khi input bị clear
+        _saveQlPwHash(pw);
         currentNvLogin = null;
         LS.del('bc_nv_login');
         enterApp('ql');
@@ -1786,11 +1788,7 @@ function enterApp(role){
     autoFillNvSelectors(currentNvLogin);
     setTimeout(autoSyncConfigForNv, 800);
   }
-  // v11: Lưu hash pw của QL để offline login (chỉ khi login online thành công)
-  if(role === 'ql' && SESSION_TOKEN && !SESSION_TOKEN.startsWith('offline_')){
-    const pwEl = document.getElementById('login-pw');
-    if(pwEl && pwEl.value) _saveQlPwHash(pwEl.value);
-  }
+  // pw QL đã được lưu hash ngay trong doLogin() trước khi input bị clear
 }
 
 function autoFillNvSelectors(mnv){
@@ -1845,18 +1843,20 @@ function doLogout(){
   document.getElementById('login-screen').style.opacity='1';
 }
 
-const SESSION_EXPIRE_MS = 24 * 60 * 60 * 1000; // 24 giờ
+const SESSION_EXPIRE_MS = 72 * 60 * 60 * 1000; // 72 giờ (3 ngày)
 
 function checkAutoLogin(){
-  // Khôi phục session token — chỉ nếu chưa hết 24h
+  // Khôi phục session token — chỉ nếu chưa hết 72h
   const sess = LS.get('bc_session');
   if(sess && sess.token && sess.userId){
     const age = Date.now() - (sess.ts || 0);
     if(age < SESSION_EXPIRE_MS){
       SESSION_TOKEN  = sess.token;
       SESSION_USER_ID= sess.userId;
+      // Refresh ts để tránh watcher logout ngay sau khi restore
+      LS.set('bc_session', { ...sess, ts: Date.now() });
     } else {
-      // Session đã quá 24h → xóa, bắt đăng nhập lại
+      // Session đã quá 72h → xóa, bắt đăng nhập lại
       LS.del('bc_session');
       LS.del('bc_role');
       LS.del('bc_nv_login');
@@ -1887,10 +1887,10 @@ function startSessionWatcher(){
     if(!sess || !sess.ts) return;
     const age = Date.now() - sess.ts;
     if(age >= SESSION_EXPIRE_MS && currentRole){
-      showToast('⏰ Phiên đăng nhập đã hết hạn (24h). Vui lòng đăng nhập lại.', 4000);
+      showToast('⏰ Phiên đăng nhập đã hết hạn (72h). Vui lòng đăng nhập lại.', 4000);
       setTimeout(doLogout, 1500);
     }
-  }, 60 * 1000); // kiểm tra mỗi 1 phút
+  }, 30 * 60 * 1000); // kiểm tra mỗi 30 phút
 }
 
 /* ═══════════════════════════════
@@ -2273,10 +2273,15 @@ async function callAPIPost(action, data={}){
   });
   const json = await res.json();
   
-  // Nếu token hết hạn → force logout
+  // Nếu token hết hạn → thông báo nhưng không tự logout (user tự quyết)
   if(json && !json.ok && json.error && json.error.includes('Phiên đăng nhập hết hạn')){
-    showToast('⚠️ Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại!', 4000);
-    setTimeout(doLogout, 1500);
+    showToast('⚠️ Token hết hạn — đang làm mới phiên. Vui lòng thử lại!', 4000);
+    // Xóa token cũ để lần sau callAPIPost không gửi token hết hạn
+    SESSION_TOKEN = null;
+    SESSION_USER_ID = null;
+    LS.del('bc_session');
+    // Không doLogout() tự động — chỉ redirect về màn hình login khi user tương tác
+    setTimeout(doLogout, 3000);
   }
   
   return json;
@@ -2868,12 +2873,14 @@ function rowHtml(item, ct_nv, actual, pct, trong, savedSoNgay, savedDungSao, sao
     soNgayVal = _getPrevSoNgay(item);
     soNgayIsAuto = soNgayVal > 0;
   }
-  const soNgayOpts = [0,1,2,3,4,5,6,7,8,9,10].map(n=>`<option value="${n}"${soNgayVal===n?' selected':''}>${n}</option>`).join('');
   const canhBaoHtml = canhBaoNgay ? `<div style="font-size:9px;color:var(--r);font-weight:700;margin-top:2px;text-align:center">⚠️ Check lại</div>` : '';
   const snBorderColor = canhBaoNgay ? 'var(--r)' : soNgayIsAuto ? 'var(--a)' : 'var(--bd2)';
+  const snColor = soNgayIsAuto ? 'var(--a)' : 'var(--t1)';
   const soNgayHtml = isOver100
     ? `<div style="text-align:center;font-size:11px;font-weight:700;color:var(--g)">0</div>`
-    : `<div><select id="sn_${iid}" onchange="onSoNgayChange('${iid}')" style="width:100%;font-size:12px;font-weight:700;border:1.5px solid ${snBorderColor};border-radius:5px;padding:4px 2px;background:var(--bg2);color:${soNgayIsAuto?'var(--a)':'var(--t1)'};font-family:inherit;text-align:center">${soNgayOpts}</select>${canhBaoHtml}</div>`;
+    : `<div><input type="number" id="sn_${iid}" value="${soNgayVal}" min="0" step="1"
+        oninput="onSoNgayChange('${iid}')"
+        style="width:100%;font-size:13px;font-weight:800;border:1.5px solid ${snBorderColor};border-radius:5px;padding:4px 3px;background:var(--bg2);color:${snColor};font-family:inherit;text-align:center"/>${canhBaoHtml}</div>`;
 
   // Cột "Trừ Sao": icon hiện số sao trừ, nhấn để toggle; nhấn lại để reset số ngày về 0
   const dungSaoActive = savedDungSao === true;
@@ -3178,7 +3185,7 @@ async function saveBC(){
   // [MỚI] Tự động xuất ảnh sau khi lưu
   setTimeout(()=>{
     try{
-      drawCanvas(st,nv,mnv,ngay,CONFIG[st].nh,results, true);
+      drawCanvas(st,nv,mnv,ngay,CONFIG[st].nh,results, true, record.so_ngay_map);
       showToast('📷 Đã lưu & xuất ảnh tự động!', 3000);
     }catch(e){ console.warn('Auto export img error:', e); }
   }, 400);
@@ -3874,12 +3881,21 @@ function exportImg(){
   if(hasAlert){
     showToast('⚠️ Có môn Số Ngày ≥4 — ảnh sẽ có thông báo tag Quản lý!', 3500);
   }
-  drawCanvas(st,nv,mnv,ngay,CONFIG[st].nh,results);
+  drawCanvas(st,nv,mnv,ngay,CONFIG[st].nh,results,false,soNgayMap);
 }
 
-function drawCanvas(st,nv,mnv,ngay,nhs,results, autoSave=false){
+function drawCanvas(st,nv,mnv,ngay,nhs,results, autoSave=false, soNgayMap=null){
   // ── Kiểm tra có môn nào Số Ngày >= 4 không ──
-  const soNgayMap = getCurrentSoNgay(st);
+  // Ưu tiên soNgayMap được truyền vào; fallback đọc từ DOM
+  if(!soNgayMap) soNgayMap = getCurrentSoNgay(st);
+  // Nếu map từ DOM toàn 0, thử đọc từ record đã lưu
+  const hasAnyValue = Object.values(soNgayMap).some(v => v > 0);
+  if(!hasAnyValue){
+    const selNgay = document.getElementById('sel-ngay')?.value || ngay;
+    const selMnv  = document.getElementById('sel-nv')?.value  || mnv;
+    const saved = LS.get('bc:'+st+':'+selMnv+':'+selNgay);
+    if(saved && saved.so_ngay_map) soNgayMap = saved.so_ngay_map;
+  }
   const hasAlertNgay = nhs.some(item => {
     const ct_nv = getCtNv(st,mnv,item);
     const actual = results[item.nh]||0;
@@ -4016,8 +4032,9 @@ function drawCanvas(st,nv,mnv,ngay,nhs,results, autoSave=false){
     // Kết quả
     c.fillStyle=actual>0?'#111':'#bbb'; c.font=actual>0?'bold 13px sans-serif':'11px sans-serif';
     c.fillText(actual>0?fmt(actual):'—',480,y+22);
-    // Trống
-    const trong=!isOver?getTrongCount(st,mnv,ngay,item):0;
+    // Trống — dùng giá trị "Số Ngày" user đã chọn (soNgayMap), fallback getTrongCount
+    const snVal = soNgayMap?.[item.nh];
+    const trong = isOver ? 0 : (typeof snVal === 'number' ? snVal : getTrongCount(st,mnv,ngay,item));
     c.fillStyle=!isOver?'#ef4444':'#16a34a'; c.font='bold 10px sans-serif';
     c.fillText(isOver?'✓':trong+' ng',540,y+21);
     // Dùng sao
