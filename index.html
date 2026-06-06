@@ -1840,12 +1840,6 @@ function enterApp(role){
     // Pull config mới từ Sheets TRƯỚC khi render báo cáo
     autoSyncConfigForNv(true).then(()=>{
       autoFillNvSelectors(currentNvLogin);
-      // Fetch sao lũy kế từ Sheets ngay sau khi vào app
-      const acc = NV_ACCOUNTS[currentNvLogin] || {};
-      if(acc.st && API_URL){
-        const today = new Date().toISOString().slice(0,10);
-        fetchSaoTichLuyFromSheets(acc.st, currentNvLogin, today);
-      }
     });
   }
   // pw QL đã được lưu hash ngay trong doLogin() trước khi input bị clear
@@ -2178,7 +2172,7 @@ let CONFIG = {
   }
 };
 let activeChips = new Set();
-let API_URL = 'https://script.google.com/macros/s/AKfycbyTNIoZWezFZSLQVyEsgf55UDpibK8tU7hg9h6F8PmO9oihHGHxhbGN403_cO10Ir9y/exec';
+let API_URL = 'https://script.google.com/macros/s/AKfycbwfxssQsuzRx4AkFSXDK-55WWpCT8pDOfDWUP_nGtVYxTOsWJ2OvLMvc0BdRcQMbjrP/exec';
 const SHEETS_URL_TGDD  = 'https://docs.google.com/spreadsheets/d/1YL6npMl6AtfSYBP1SFjRwKT4QEC3dJrRE4ww5y-Ey3M/edit?gid=926424567#gid=926424567';
 const SHEETS_URL_TZ    = 'https://docs.google.com/spreadsheets/d/1YL6npMl6AtfSYBP1SFjRwKT4QEC3dJrRE4ww5y-Ey3M/edit?gid=2000696213#gid=2000696213';
 const SHEETS_URL_SAO   = 'https://docs.google.com/spreadsheets/d/1YL6npMl6AtfSYBP1SFjRwKT4QEC3dJrRE4ww5y-Ey3M/edit?gid=1793741515#gid=1793741515';
@@ -2367,7 +2361,14 @@ async function pullFromSheets(){
       saveState(); activeChips.clear();
       LS.set(CONFIG_PULL_KEY, Date.now());
       setSyncStatus('ok','✅ Đã cập nhật từ Sheets');
-      showToast('✅ Đã cập nhật target từ Google Sheets!');
+      // Rebuild dropdown NV
+      const _pfsStEl = document.getElementById('sel-st')?.value;
+      if(_pfsStEl){ onSelSt(); }
+      if(currentRole==='nv' && currentNvLogin){
+        const _pfsSel = document.getElementById('sel-nv');
+        if(_pfsSel) _pfsSel.value = currentNvLogin;
+      }
+      showToast('✅ Đã cập nhật target + danh sách NV từ Google Sheets!');
     } else {
       setSyncStatus('err','Không có dữ liệu');
       showToast('⚠️ Sheets chưa có config');
@@ -2626,11 +2627,19 @@ async function syncConfigAndLoad(){
     </div>`;
 
   try{
-    // Pull config từ Google Sheets (môn thi đua + chỉ tiêu)
+    // Pull config từ Google Sheets (môn thi đua + chỉ tiêu + danh sách NV)
     await pullConfigFromNewSheet(st);
     _configSynced = true;
     activeChips.clear(); // reset chip để buildChipBar lấy đúng môn mới
-    showToast('✅ Đồng bộ xong! Môn thi đua + Tỉ lệ NV đã cập nhật.', 2500);
+    // Rebuild dropdown NV để phản ánh danh sách mới từ Trang tính
+    const selSt2 = document.getElementById('sel-st');
+    if(selSt2 && selSt2.value) onSelSt();
+    // Nếu đang login là NV, tự điền lại selector (tránh mất chọn sau khi rebuild)
+    if(currentRole==='nv' && currentNvLogin){
+      const selNv2 = document.getElementById('sel-nv');
+      if(selNv2) selNv2.value = currentNvLogin;
+    }
+    showToast('✅ Đồng bộ xong! Môn thi đua + NV đã cập nhật từ Trang tính.', 2500);
     setSyncStatus('ok','✅ Đã đồng bộ môn thi đua — '+new Date().toLocaleTimeString('vi-VN'));
   }catch(e){
     // Nếu không kết nối được Sheets → dùng config local, vẫn cho vào
@@ -2703,10 +2712,10 @@ async function pullConfigFromNewSheet(filterSt){
         }
       }
 
-      // ── PASS 2: Pull dữ liệu NV (ratio) — rows nằm giữa nvHeaderRowIdx và headerRowIdx ──
+      // ── PASS 2: Pull danh sách NV từ Sheets — THAY THẾ hoàn toàn từ Trang tính ──
       if(nvHeaderRowIdx >= 0 && iNvMNV >= 0){
-        const nvEnd = headerRowIdx >= 0 ? headerRowIdx : nvHeaderRowIdx + 10;
-        let updatedCount = 0;
+        const nvEnd = headerRowIdx >= 0 ? headerRowIdx : nvHeaderRowIdx + 20;
+        const nvListFromSheet = [];
         for(let i = nvHeaderRowIdx + 1; i < nvEnd; i++){
           const r = rows[i];
           if(!r) continue;
@@ -2715,15 +2724,16 @@ async function pullConfigFromNewSheet(filterSt){
           const ten   = iNvTen >= 0 ? String(getV(iNvTen) ?? '').trim() : '';
           const ratio = iNvRatio >= 0 ? parseFloat(getV(iNvRatio)) || 0 : 0;
           if(!mnv) continue;
-          // Cập nhật vào CONFIG nếu NV đã tồn tại; không thêm NV mới từ sheet (quản lý qua UI)
-          const existing = CONFIG[tab.st].nv.find(n=>n.mnv===mnv);
-          if(existing){
-            existing.ratio = ratio;
-            if(ten) existing.ten = ten;
-            updatedCount++;
-          }
+          nvListFromSheet.push({ mnv, ten, ratio });
         }
-        console.log(`✅ Cập nhật ratio cho ${updatedCount} NV từ tab ${tab.st}`);
+        if(nvListFromSheet.length > 0){
+          // THAY THẾ toàn bộ danh sách NV bằng dữ liệu từ Trang tính
+          CONFIG[tab.st].nv = nvListFromSheet;
+          console.log(`✅ Đồng bộ ${nvListFromSheet.length} NV từ Trang tính tab ${tab.st}:`,
+            nvListFromSheet.map(n=>n.ten));
+        } else {
+          console.warn(`⚠️ Không tìm thấy NV nào trong tab ${tab.st} — giữ nguyên danh sách cũ`);
+        }
       }
 
       if(headerRowIdx < 0){
@@ -2813,25 +2823,28 @@ function loadSaoDangCo(st, mnv, ngayHienTai){
 async function fetchSaoTichLuyFromSheets(st, mnv, ngayHienTai){
   if(!API_URL) return;
   try{
-    // getSaoLuyKe = STL đầu tháng (QL set) + sao_net BaoCao tháng này
+    // Dùng getSaoLuyKe — đã tính đủ: saoTL (QL set) + saoBC (BaoCao tháng này trên Sheets)
     const lk = await callAPIPost('getSaoLuyKe', { st, mnv });
     if(lk && lk.ok){
-      // Cache luyKe (tổng) và saoTL (đầu tháng QL set) vào localStorage
-      // để mọi máy thấy cùng số khi offline
-      const stlData = getStlData();
-      if(!stlData[st]) stlData[st]={};
-      stlData[st][mnv] = {
-        sao:     typeof lk.saoTL === 'number' ? lk.saoTL : (stlData[st][mnv]?.sao || 0),
-        luyKe:   lk.luyKe,   // ← cache tổng lũy kế từ Sheets
-        updatedAt: new Date().toLocaleString('vi-VN'),
-        updatedBy: 'Sheets sync'
-      };
-      LS.set(STL_KEY, stlData);
-      // Cập nhật UI — dùng luyKe từ Sheets (source of truth)
+      // Cache STL đầu tháng về local để loadSaoDangCo dùng khi offline
+      if(typeof lk.saoTL === 'number'){
+        const stlData = getStlData();
+        if(!stlData[st]) stlData[st]={};
+        stlData[st][mnv] = {
+          sao: lk.saoTL,
+          updatedAt: new Date().toLocaleString('vi-VN'),
+          updatedBy: 'Sheets sync'
+        };
+        LS.set(STL_KEY, stlData);
+      }
+      // Cập nhật UI lũy kế (meta-bar và form báo cáo)
       const lkEl = document.getElementById('sao-luy-ke');
       if(lkEl) lkEl.textContent = lk.luyKe;
       const bcEl = document.getElementById('sao-luy-ke-bc');
-      if(bcEl){ bcEl.textContent = lk.luyKe; onInputChange(); }
+      if(bcEl){
+        bcEl.textContent = lk.luyKe;
+        onInputChange();
+      }
     }
   }catch(e){ /* silent — giữ ước tính local */ }
 }
@@ -4950,10 +4963,7 @@ function getStlAudit(){
 }
 function getSaoTichLuyNV(st, mnv){
   const data = getStlData();
-  const entry = data?.[st]?.[mnv];
-  if(!entry) return 0;
-  // Ưu tiên luyKe (tổng sync từ Sheets), fallback sao (STL QL set)
-  return typeof entry.luyKe === 'number' ? entry.luyKe : (entry.sao || 0);
+  return data?.[st]?.[mnv]?.sao || 0;
 }
 
 async function renderSaoTichLuy(){
@@ -5153,7 +5163,19 @@ async function manualRefreshSao(){
     } else { showToast('⚠️ Không lấy được sao'); }
   }catch(e){ showToast('❌ Lỗi: '+e.message); }
 }
-// fetchSaoTichLuyFromSheets định nghĩa ở trên (dòng ~2807)
+async function fetchSaoTichLuyFromSheets(st, mnv, ngayHienTai){
+  if(!API_URL) return;
+  try{
+    const lk = await callAPIPost('getSaoLuyKe', { st, mnv });
+    if(lk && lk.ok && typeof lk.luyKe === 'number'){
+      const lkEl = document.getElementById('sao-luy-ke');
+      if(lkEl) lkEl.textContent = lk.luyKe;
+      const bcEl = document.getElementById('sao-luy-ke-bc');
+      if(bcEl){ bcEl.textContent = lk.luyKe; onInputChange(); }
+    }
+  }catch(e){}
+}
+async function fetchAllSaoTichLuyFromSheets(){}
 function _refreshStlRowCalc(){}
 
 /* ═══════════════════════════════
@@ -5326,38 +5348,36 @@ async function qtSaveToSheets(){
 /* ═══════════════════════════════
    NV AUTO-PULL CONFIG KHI MỞ BÁO CÁO
 ═══════════════════════════════ */
-const CONFIG_PULL_KEY      = 'config_last_pull';
-const CONFIG_TS_KEY        = 'config_sheets_ts';   // timestamp config trên Sheets
-const CONFIG_PULL_INTERVAL = 2 * 60 * 1000;        // check mỗi 2 phút
+const CONFIG_PULL_KEY = 'config_last_pull';
+const CONFIG_PULL_INTERVAL = 5 * 60 * 1000; // 5 phút pull 1 lần
 
 async function autoSyncConfigForNv(forceRefresh=false){
   if(!API_URL) return;
   const lastPull = LS.get(CONFIG_PULL_KEY) || 0;
-  const shouldCheck = forceRefresh || (Date.now() - lastPull >= CONFIG_PULL_INTERVAL);
-  if(!shouldCheck) return;
+  const shouldPull = forceRefresh || (Date.now() - lastPull >= CONFIG_PULL_INTERVAL);
+  if(!shouldPull) return;
   try{
-    // Luôn pull config mới nhất từ Sheets (getConfig là public, không cần token)
+    // getConfig không cần auth — dùng callAPIPublic cho chắc
     const r = await callAPIPublic('getConfig', {});
-    LS.set(CONFIG_PULL_KEY, Date.now());
     if(r && r.config){
-      // So sánh timestamp để biết có thay đổi không
-      const sheetTs = r.updatedAt || r.config?._updatedAt || '';
-      const localTs = LS.get(CONFIG_TS_KEY) || '';
-      const hasChanged = forceRefresh || (sheetTs && sheetTs !== localTs);
-
-      if(hasChanged || !localTs){
-        CONFIG = r.config;
-        saveState();
-        activeChips.clear();
-        if(sheetTs) LS.set(CONFIG_TS_KEY, sheetTs);
-        // Refresh UI nếu đang xem báo cáo
-        const selSt  = document.getElementById('sel-st')?.value;
-        const selMnv = document.getElementById('sel-nv')?.value;
-        const selNgay= document.getElementById('sel-ngay')?.value;
-        if(selSt && selMnv && selNgay){
-          onSelNv();
-          if(!forceRefresh) showToast('🔄 Target đã được cập nhật từ QL!', 3000);
-        }
+      CONFIG = r.config;
+      saveState();
+      activeChips.clear();
+      LS.set(CONFIG_PULL_KEY, Date.now());
+      // Rebuild dropdown NV để phản ánh danh sách NV mới từ Trang tính
+      const curSt = document.getElementById('sel-st')?.value;
+      if(curSt){ onSelSt(); }
+      if(currentRole==='nv' && currentNvLogin){
+        const nvSel = document.getElementById('sel-nv');
+        if(nvSel) nvSel.value = currentNvLogin;
+      }
+      // Nếu đang xem báo cáo → refresh để áp target mới
+      const selSt  = document.getElementById('sel-st')?.value;
+      const selMnv = document.getElementById('sel-nv')?.value;
+      const selNgay= document.getElementById('sel-ngay')?.value;
+      if(selSt && selMnv && selNgay && !forceRefresh){
+        onSelNv();
+        showToast('🔄 Target + danh sách NV đã cập nhật từ Trang tính!', 3000);
       }
     }
   }catch(e){ /* silent — dùng config local */ }
