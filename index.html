@@ -1729,7 +1729,6 @@ function previewNv(code){
   const el = document.getElementById('nv-preview');
   const q = code.trim();
   if(!q){ el.innerHTML=''; return; }
-  if(q.length < 2){ el.innerHTML=`<div style="color:var(--t3);font-size:12px;text-align:center;padding:6px">Nhập thêm số...</div>`; return; }
   const found = _findNvByCode(q);
   if(found.length === 0){
     el.innerHTML = `<div style="color:var(--t3);font-size:12px;text-align:center;padding:8px">Không tìm thấy nhân viên</div>`;
@@ -1837,10 +1836,8 @@ function enterApp(role){
   rebuildNav();
   // Tự động chọn siêu thị + nhân viên nếu là NV
   if(role==='nv' && currentNvLogin){
-    // Pull config mới từ Sheets TRƯỚC khi render báo cáo
-    autoSyncConfigForNv(true).then(()=>{
-      autoFillNvSelectors(currentNvLogin);
-    });
+    autoFillNvSelectors(currentNvLogin);
+    setTimeout(autoSyncConfigForNv, 800);
   }
   // pw QL đã được lưu hash ngay trong doLogin() trước khi input bị clear
 }
@@ -2172,7 +2169,7 @@ let CONFIG = {
   }
 };
 let activeChips = new Set();
-let API_URL = 'https://script.google.com/macros/s/AKfycbwfxssQsuzRx4AkFSXDK-55WWpCT8pDOfDWUP_nGtVYxTOsWJ2OvLMvc0BdRcQMbjrP/exec';
+let API_URL = 'https://script.google.com/macros/s/AKfycbz9oiCWjy1di9WilSoG9F8YusIcSoYKM3nbqDeumnLoF2wF7Q_96R9MeBoMEZFShr0I/exec';
 const SHEETS_URL_TGDD  = 'https://docs.google.com/spreadsheets/d/1YL6npMl6AtfSYBP1SFjRwKT4QEC3dJrRE4ww5y-Ey3M/edit?gid=926424567#gid=926424567';
 const SHEETS_URL_TZ    = 'https://docs.google.com/spreadsheets/d/1YL6npMl6AtfSYBP1SFjRwKT4QEC3dJrRE4ww5y-Ey3M/edit?gid=2000696213#gid=2000696213';
 const SHEETS_URL_SAO   = 'https://docs.google.com/spreadsheets/d/1YL6npMl6AtfSYBP1SFjRwKT4QEC3dJrRE4ww5y-Ey3M/edit?gid=1793741515#gid=1793741515';
@@ -2186,8 +2183,6 @@ function loadState(){
     if(saved.api_url) API_URL = saved.api_url;
     // nếu chưa lưu url thì dùng default
   }
-  // Bake target cố định cho NV (kể cả config local cũ chưa có targets)
-  ['TGDĐ','Topzone'].forEach(s => bakeCtNvTargets(s));
 }
 function saveState(){
   LS.set(STORAGE_KEY, { config: CONFIG, api_url: API_URL });
@@ -2302,15 +2297,12 @@ async function callAPIPost(action, data={}){
       SESSION_USER_ID = saved.userId;
     }
   }
-
-  // Token local (login không qua Sheets) → không gửi token thật, gửi marker để server biết
-  const isLocalToken = SESSION_TOKEN && (SESSION_TOKEN.startsWith('local_'));
   
   const payload = {
     action,
     ...data,
     userId: SESSION_USER_ID,
-    token:  isLocalToken ? '' : SESSION_TOKEN,
+    token:  SESSION_TOKEN,
   };
   
   const body = JSON.stringify(payload);
@@ -2357,22 +2349,12 @@ async function pullFromSheets(){
   if(!API_URL){ showToast('⚠️ Chưa cấu hình API URL'); return; }
   setSyncStatus('loading','Đang kéo...');
   try{
-    const r = await callAPIPublic('getConfig', {});
+    const r = await callAPIPost('getConfig', {});
     if(r && r.config){
       CONFIG = r.config;
-      // Bake target cố định cho từng NV
-      ['TGDĐ','Topzone'].forEach(s => bakeCtNvTargets(s));
       saveState(); activeChips.clear();
-      LS.set(CONFIG_PULL_KEY, Date.now());
       setSyncStatus('ok','✅ Đã cập nhật từ Sheets');
-      // Rebuild dropdown NV
-      const _pfsStEl = document.getElementById('sel-st')?.value;
-      if(_pfsStEl){ onSelSt(); }
-      if(currentRole==='nv' && currentNvLogin){
-        const _pfsSel = document.getElementById('sel-nv');
-        if(_pfsSel) _pfsSel.value = currentNvLogin;
-      }
-      showToast('✅ Đã cập nhật target + danh sách NV từ Google Sheets!');
+      showToast('✅ Đã cập nhật target từ Google Sheets!');
     } else {
       setSyncStatus('err','Không có dữ liệu');
       showToast('⚠️ Sheets chưa có config');
@@ -2393,37 +2375,10 @@ function getCtNgay(st, item){
 
 function getCtNv(st, mnv, item){
   const nv = CONFIG[st].nv.find(n=>n.mnv===mnv);
-  // Ưu tiên target cố định đã baked sẵn khi QL lưu
-  if(nv && nv.targets && typeof nv.targets[item.nh] === 'number'){
-    return nv.targets[item.nh];
-  }
-  // Fallback: chia động (dùng khi chưa có baked targets)
   const ctNgay = getCtNgay(st, item);
   if(!nv) return ctNgay / (CONFIG[st].nv.length||1);
   if(nv.ratio>0) return +(ctNgay * nv.ratio / 100).toFixed(3);
   return +(ctNgay / (CONFIG[st].nv.length||1)).toFixed(3);
-}
-
-// Tính và lưu cứng target ngày cho từng NV×môn vào CONFIG
-// Gọi trước mỗi lần saveConfig để NV luôn đọc được target đúng
-function bakeCtNvTargets(st){
-  const nvs = CONFIG[st]?.nv;
-  const nhs = CONFIG[st]?.nh;
-  if(!nvs || !nhs) return;
-  const nvCount = nvs.length || 1;
-  nvs.forEach(nv => {
-    nv.targets = {};
-    nhs.forEach(item => {
-      const ctNgay = item.ct / 30;
-      let ct_nv;
-      if(nv.ratio > 0){
-        ct_nv = +(ctNgay * nv.ratio / 100).toFixed(3);
-      } else {
-        ct_nv = +(ctNgay / nvCount).toFixed(3);
-      }
-      nv.targets[item.nh] = ct_nv;
-    });
-  });
 }
 
 function getDaysInfoHtml(st, ngay){
@@ -2492,11 +2447,6 @@ function toggleDungSao(iid){
   }
 
   dungSaoState[iid] = !dungSaoState[iid];
-  // Nếu vừa bật dùng sao → reset hidden input số ngày về 0 ngay
-  if(dungSaoState[iid]){
-    const snEl = document.getElementById('sn_'+iid);
-    if(snEl) snEl.value = 0;
-  }
   const nv=CONFIG[st].nv.find(n=>n.mnv===mnv);
   const saved=LS.get(`bc:${st}:${mnv}:${ngay}`)||{};
   const curResults = getCurrentResults(st);
@@ -2504,29 +2454,8 @@ function toggleDungSao(iid){
   renderBaoCao(st, nv, mnv, ngay, curResults, saved.note||'', saved.checklist||'', saved.sao_override, curSoNgay);
 }
 
-function setSoNgay(iid, val){
-  const inp = document.getElementById('sn_'+iid);
-  if(!inp) return;
-  const cur = parseInt(inp.value)||0;
-  // Click lại cùng số → toggle về 0
-  const newVal = cur === val ? 0 : val;
-  inp.value = newVal;
-  // Re-render các nút trong cùng row để phản ánh selection mới
-  const row = document.getElementById('row_'+iid);
-  if(row){
-    const SN_COLORS = {0:'#94a3b8', 1:'#22c55e', 2:'#f59e0b', 3:'#ef4444', 4:'#8b5cf6'};
-    row.querySelectorAll('[data-sn-btn]').forEach(btn => {
-      const n = parseInt(btn.dataset.snBtn);
-      const col = SN_COLORS[n];
-      const active = n === newVal;
-      btn.style.background = active ? col : 'transparent';
-      btn.style.color = active ? '#fff' : col;
-    });
-  }
-  onInputChange();
-}
-
 function onSoNgayChange(iid){
+  // Cập nhật cảnh báo live nếu cần
   onInputChange();
 }
 
@@ -2658,22 +2587,11 @@ async function syncConfigAndLoad(){
     </div>`;
 
   try{
-    // Pull config từ Google Sheets (môn thi đua + chỉ tiêu + danh sách NV)
+    // Pull config từ Google Sheets (môn thi đua + chỉ tiêu)
     await pullConfigFromNewSheet(st);
-    // Bake target cố định cho NV sau khi đọc từ Trang tính
-    ['TGDĐ','Topzone'].forEach(s => bakeCtNvTargets(s));
-    saveState();
     _configSynced = true;
     activeChips.clear(); // reset chip để buildChipBar lấy đúng môn mới
-    // Rebuild dropdown NV để phản ánh danh sách mới từ Trang tính
-    const selSt2 = document.getElementById('sel-st');
-    if(selSt2 && selSt2.value) onSelSt();
-    // Nếu đang login là NV, tự điền lại selector (tránh mất chọn sau khi rebuild)
-    if(currentRole==='nv' && currentNvLogin){
-      const selNv2 = document.getElementById('sel-nv');
-      if(selNv2) selNv2.value = currentNvLogin;
-    }
-    showToast('✅ Đồng bộ xong! Môn thi đua + NV đã cập nhật từ Trang tính.', 2500);
+    showToast('✅ Đồng bộ xong! Môn thi đua + Tỉ lệ NV đã cập nhật.', 2500);
     setSyncStatus('ok','✅ Đã đồng bộ môn thi đua — '+new Date().toLocaleTimeString('vi-VN'));
   }catch(e){
     // Nếu không kết nối được Sheets → dùng config local, vẫn cho vào
@@ -2746,10 +2664,10 @@ async function pullConfigFromNewSheet(filterSt){
         }
       }
 
-      // ── PASS 2: Pull danh sách NV từ Sheets — THAY THẾ hoàn toàn từ Trang tính ──
+      // ── PASS 2: Pull dữ liệu NV (ratio) — rows nằm giữa nvHeaderRowIdx và headerRowIdx ──
       if(nvHeaderRowIdx >= 0 && iNvMNV >= 0){
-        const nvEnd = headerRowIdx >= 0 ? headerRowIdx : nvHeaderRowIdx + 20;
-        const nvListFromSheet = [];
+        const nvEnd = headerRowIdx >= 0 ? headerRowIdx : nvHeaderRowIdx + 10;
+        let updatedCount = 0;
         for(let i = nvHeaderRowIdx + 1; i < nvEnd; i++){
           const r = rows[i];
           if(!r) continue;
@@ -2758,16 +2676,15 @@ async function pullConfigFromNewSheet(filterSt){
           const ten   = iNvTen >= 0 ? String(getV(iNvTen) ?? '').trim() : '';
           const ratio = iNvRatio >= 0 ? parseFloat(getV(iNvRatio)) || 0 : 0;
           if(!mnv) continue;
-          nvListFromSheet.push({ mnv, ten, ratio });
+          // Cập nhật vào CONFIG nếu NV đã tồn tại; không thêm NV mới từ sheet (quản lý qua UI)
+          const existing = CONFIG[tab.st].nv.find(n=>n.mnv===mnv);
+          if(existing){
+            existing.ratio = ratio;
+            if(ten) existing.ten = ten;
+            updatedCount++;
+          }
         }
-        if(nvListFromSheet.length > 0){
-          // THAY THẾ toàn bộ danh sách NV bằng dữ liệu từ Trang tính
-          CONFIG[tab.st].nv = nvListFromSheet;
-          console.log(`✅ Đồng bộ ${nvListFromSheet.length} NV từ Trang tính tab ${tab.st}:`,
-            nvListFromSheet.map(n=>n.ten));
-        } else {
-          console.warn(`⚠️ Không tìm thấy NV nào trong tab ${tab.st} — giữ nguyên danh sách cũ`);
-        }
+        console.log(`✅ Cập nhật ratio cho ${updatedCount} NV từ tab ${tab.st}`);
       }
 
       if(headerRowIdx < 0){
@@ -2828,59 +2745,56 @@ function getPrevDaySao(st, mnv, ngay){
 }
 
 function loadSaoDangCo(st, mnv, ngayHienTai){
-  // Ước tính local: chỉ tính tháng hiện tại (khớp logic GAS getSaoLuyKe)
-  const thangHienTai = (ngayHienTai||new Date().toISOString().slice(0,10)).slice(0,7); // 'yyyy-MM'
-  let fromBC = 0;
+  // Sao lũy kế = tổng tất cả ngày đã lưu (bao gồm cả hôm nay nếu đã lưu)
+  let fromBC=0;
   LS.keys(`bc:${st}:${mnv}:`).forEach(k=>{
     const d = LS.get(k);
-    if(!d) return;
-    // Chỉ tính báo cáo trong tháng hiện tại
-    const ngayBC = (d.ngay||k.split(':')[3]||'').slice(0,7);
-    if(ngayBC !== thangHienTai) return;
-    // Ưu tiên sao_override nếu có (khớp với GAS)
-    if(d.sao_override !== undefined && d.sao_override !== null && d.sao_override !== '')
-      fromBC += parseFloat(d.sao_override) || 0;
-    else
-      fromBC += d.sao_net || 0;
+    if(d && d.sao_net) fromBC += d.sao_net;
   });
-  // Sao tích lũy đầu tháng do QL set (từ cache local đã sync)
+  // Sao tích lũy do QL set (từ cache local đã sync)
   const fromStl = getSaoTichLuyNV(st, mnv);
-  const total = Math.round((fromBC + fromStl) * 100) / 100;
-  // Cập nhật lũy kế (local estimate; sẽ overwrite khi getSaoLuyKe từ Sheets về)
+  const total = fromBC + fromStl;
+  // Cập nhật lũy kế (local estimate; sẽ overwrite khi fetch từ Sheets xong)
   const lkEl = document.getElementById('sao-luy-ke');
-  if(lkEl) lkEl.textContent = total;
+  if(lkEl) lkEl.textContent = total > 0 ? total : '0';
   return total;
 }
 
-// Fetch sao lũy kế từ Sheets (getSaoLuyKe = STL đầu tháng + BC tháng này)
-// Đây là nguồn chính xác duy nhất — NV và QL đều thấy cùng số
+// Fetch sao tích lũy từ Sheets về và cache local, sau đó refresh UI
 async function fetchSaoTichLuyFromSheets(st, mnv, ngayHienTai){
   if(!API_URL) return;
   try{
-    // Dùng getSaoLuyKe — đã tính đủ: saoTL (QL set) + saoBC (BaoCao tháng này trên Sheets)
-    const lk = await callAPIPost('getSaoLuyKe', { st, mnv });
-    if(lk && lk.ok){
-      // Cache STL đầu tháng về local để loadSaoDangCo dùng khi offline
-      if(typeof lk.saoTL === 'number'){
-        const stlData = getStlData();
-        if(!stlData[st]) stlData[st]={};
-        stlData[st][mnv] = {
-          sao: lk.saoTL,
-          updatedAt: new Date().toLocaleString('vi-VN'),
-          updatedBy: 'Sheets sync'
-        };
-        LS.set(STL_KEY, stlData);
-      }
-      // Cập nhật UI lũy kế (meta-bar và form báo cáo)
-      const lkEl = document.getElementById('sao-luy-ke');
-      if(lkEl) lkEl.textContent = lk.luyKe;
+    const r = await callAPIPost('getSaoTichLuy', { st, mnv });
+    if(r && r.ok && typeof r.sao === 'number'){
+      // Ghi vào STL cache local để các hàm khác dùng
+      const stlData = getStlData();
+      if(!stlData[st]) stlData[st]={};
+      const now = new Date().toLocaleString('vi-VN');
+      stlData[st][mnv] = {
+        sao: r.sao,
+        updatedAt: now,
+        updatedBy: 'Sheets sync'
+      };
+      LS.set(STL_KEY, stlData);
+      // Refresh hiển thị
+      loadSaoDangCo(st, mnv, ngayHienTai);
+      // Cập nhật sao lũy kế trong form báo cáo nếu đang mở
       const bcEl = document.getElementById('sao-luy-ke-bc');
       if(bcEl){
-        bcEl.textContent = lk.luyKe;
+        const lkEl = document.getElementById('sao-luy-ke');
+        if(lkEl) bcEl.textContent = lkEl.textContent;
         onInputChange();
       }
     }
-  }catch(e){ /* silent — giữ ước tính local */ }
+  }catch(e){ /* silent — dùng local cache */ }
+  // Fetch lũy kế từ Sheets để hiển thị chính xác
+  try{
+    const lk = await callAPIPost('getSaoLuyKe', { st, mnv });
+    if(lk && lk.ok){
+      const lkEl = document.getElementById('sao-luy-ke');
+      if(lkEl) lkEl.textContent = lk.luyKe;
+    }
+  }catch(e){}
 }
 
 // Pull toàn bộ sao tích lũy tất cả NV từ Sheets (QL dùng sau khi mở trang STL)
@@ -3064,45 +2978,23 @@ function rowHtml(item, ct_nv, actual, pct, trong, savedSoNgay, savedDungSao, sao
 
   // Số ngày
   const isOver100 = pct >= (item.pct5||100)/100;
-  // Dùng sao active → force 0
-  const _forcedZero = isOver100 || (savedDungSao === true);
   let soNgayVal;
-  if(_forcedZero){
-    soNgayVal = 0;
-  } else if(typeof savedSoNgay === 'number' && savedSoNgay > 0){
+  let soNgayIsAuto = false;
+  if(typeof savedSoNgay === 'number'){
     soNgayVal = savedSoNgay;
   } else {
-    soNgayVal = _getPrevSoNgay(item) || 0;
+    soNgayVal = _getPrevSoNgay(item);
+    soNgayIsAuto = soNgayVal > 0;
   }
-
-  // Màu cho từng số ngày
-  const SN_COLORS = {0:'#94a3b8', 1:'#22c55e', 2:'#f59e0b', 3:'#ef4444', 4:'#8b5cf6'};
-  const snColor = SN_COLORS[soNgayVal] || '#94a3b8';
-
-  let soNgayHtml;
-  if(_forcedZero){
-    // >100% hoặc dùng sao → hiện 0 tĩnh, màu xanh lá (tốt) hoặc xám
-    const zeroColor = isOver100 ? '#22c55e' : '#94a3b8';
-    soNgayHtml = `<div style="text-align:center;font-size:13px;font-weight:800;color:${zeroColor};padding:4px 0">0</div>
-      <input type="hidden" id="sn_${iid}" value="0"/>`;
-  } else {
-    // Hiện 4 nút bấm: 1 2 3 4
-    const btns = [1,2,3,4].map(n => {
-      const active = soNgayVal === n;
-      const col = SN_COLORS[n];
-      return `<div data-sn-btn="${n}" onclick="setSoNgay('${iid}',${n})" style="
-        flex:1;text-align:center;cursor:pointer;padding:4px 0;border-radius:5px;
-        font-size:12px;font-weight:800;line-height:1.2;
-        background:${active ? col : 'transparent'};
-        color:${active ? '#fff' : col};
-        border:1.5px solid ${col};
-        transition:all .12s">${n}</div>`;
-    }).join('');
-    soNgayHtml = `<div style="display:flex;gap:2px;align-items:center">
-      ${btns}
-    </div>
-    <input type="hidden" id="sn_${iid}" value="${soNgayVal}"/>`;
-  }
+  if(isOver100) soNgayVal = 0; // đạt rồi → số ngày = 0
+  const canhBaoHtml = canhBaoNgay ? `<div style="font-size:9px;color:var(--r);font-weight:700;margin-top:2px;text-align:center">⚠️ Check lại</div>` : '';
+  const snBorderColor = canhBaoNgay ? 'var(--r)' : soNgayIsAuto ? 'var(--a)' : 'var(--bd2)';
+  const snColor = soNgayIsAuto ? 'var(--a)' : 'var(--t1)';
+  const soNgayHtml = isOver100
+    ? `<div style="text-align:center;font-size:11px;font-weight:700;color:var(--g)">0</div>`
+    : `<div><input type="number" id="sn_${iid}" value="${soNgayVal}" min="0" step="1"
+        oninput="onSoNgayChange('${iid}')"
+        style="width:100%;font-size:13px;font-weight:800;border:1.5px solid ${snBorderColor};border-radius:5px;padding:4px 3px;background:var(--bg2);color:${snColor};font-family:inherit;text-align:center"/>${canhBaoHtml}</div>`;
 
   // Cột "Trừ Sao": icon hiện số sao trừ, nhấn để toggle; nhấn lại để reset số ngày về 0
   const dungSaoActive = savedDungSao === true;
@@ -3383,7 +3275,17 @@ function onInputChange(){
     }
     const chkEl=row.querySelector('input[type=checkbox]');
     if(chkEl) chkEl.checked=pct>=pctThresh;
-    // soNgay được kiểm soát bởi rowHtml (nút bấm) — không cần xử lý ở đây
+    // Nếu vừa đạt >100% → disable soNgay (không reset giá trị)
+    const snEl=document.getElementById('sn_'+iid);
+    if(snEl){
+      if(pct>=pctThresh){
+        snEl.disabled=true;
+        snEl.style.opacity='.4';
+      } else {
+        snEl.disabled=false;
+        snEl.style.opacity='';
+      }
+    }
   });
 }
 
@@ -3413,11 +3315,7 @@ async function saveBC(){
   }
 
   const saoCu = getSaoCuFromUI();
-  // Tính sao_override: chỉ lưu nếu user đã chỉnh tay (khác với auto)
-  const saoCuAuto = getPrevDaySao(st, mnv, ngay);
-  const sao_override = (saoCu !== saoCuAuto) ? saoCu : undefined;
   const record={st,mnv,ten:nv.ten,ngay,results,sao_duong:saoDuong,sao_am:saoAm,sao_net:net,note,checklist,ts:Date.now()};
-  if(sao_override !== undefined) record.sao_override = sao_override;
   record.so_ngay_map = getCurrentSoNgay(st);
   record.dung_sao_map = {...dungSaoState};
   if(thuongThem > 0) record.results['__thuong_them__'] = thuongThem;
@@ -3435,7 +3333,7 @@ async function saveBC(){
   if(s) s.textContent=`Lưu lúc ${new Date().toTimeString().slice(0,8)}`;
   setTimeout(()=>{
     try{
-      drawCanvas(st,nv,mnv,ngay,CONFIG[st].nh,results, true, record.so_ngay_map, record.dung_sao_map);
+      drawCanvas(st,nv,mnv,ngay,CONFIG[st].nh,results, true, record.so_ngay_map);
       showToast('📷 Đã lưu & xuất ảnh tự động!', 3000);
     }catch(e){ console.warn('Auto export img error:', e); }
   }, 400);
@@ -3475,10 +3373,8 @@ function collectSheetNv(){
   });
 }
 async function saveSheetNvToSheets(){
-  collectSheetNv();
+  collectSheetNv(); saveState();
   const st = document.getElementById('sheet-nv-st').value;
-  bakeCtNvTargets(st); // tính cứng target NV trước khi lưu
-  saveState();
   const count = CONFIG[st].nv.length;
   showToast('⏳ Đang lưu danh sách nhân viên...');
   if(API_URL){
@@ -3603,7 +3499,6 @@ async function saveSheetStToSheets(){
   const wd=getWorkDays();
   CONFIG[st].workDays=wd;
   collectSheetSt();
-  bakeCtNvTargets(st); // tính cứng target NV trước khi lưu
   saveState(); activeChips.clear();
   const count = CONFIG[st].nh.length;
   // Tự động đồng bộ với Thưởng/Trừ sao (cùng dùng CONFIG[st].nh)
@@ -4160,13 +4055,13 @@ function exportImg(){
   if(hasAlert){
     showToast('⚠️ Có môn Số Ngày ≥4 — ảnh sẽ có thông báo tag Quản lý!', 3500);
   }
-  drawCanvas(st,nv,mnv,ngay,CONFIG[st].nh,results,false,soNgayMap,{...dungSaoState});
+  drawCanvas(st,nv,mnv,ngay,CONFIG[st].nh,results,false,soNgayMap);
 }
 
-function drawCanvas(st,nv,mnv,ngay,nhs,results, autoSave=false, soNgayMap=null, dungSaoMap=null){
+function drawCanvas(st,nv,mnv,ngay,nhs,results, autoSave=false, soNgayMap=null){
   // ── Kiểm tra có môn nào Số Ngày >= 4 không ──
+  // Ưu tiên soNgayMap được truyền vào; fallback đọc từ DOM
   if(!soNgayMap) soNgayMap = getCurrentSoNgay(st);
-  if(!dungSaoMap) dungSaoMap = {...dungSaoState};
   // Nếu map từ DOM toàn 0, thử đọc từ record đã lưu
   const hasAnyValue = Object.values(soNgayMap).some(v => v > 0);
   if(!hasAnyValue){
@@ -4311,14 +4206,11 @@ function drawCanvas(st,nv,mnv,ngay,nhs,results, autoSave=false, soNgayMap=null, 
     // Kết quả
     c.fillStyle=actual>0?'#111':'#bbb'; c.font=actual>0?'bold 13px sans-serif':'11px sans-serif';
     c.fillText(actual>0?fmt(actual):'—',480,y+22);
-    // Số ngày — màu theo giá trị (0=xám, 1=xanh lá, 2=cam, 3=đỏ, 4=tím)
+    // Trống — dùng giá trị "Số Ngày" user đã chọn (soNgayMap), fallback getTrongCount
     const snVal = soNgayMap?.[item.nh];
-    const dungSao = dungSaoMap?.[('inp_'+item.nh.replace(/[^a-z0-9]/gi,'_'))];
-    const trong = (isOver || dungSao) ? 0 : (typeof snVal === 'number' ? snVal : 0);
-    const SN_CANVAS_COLORS = {0:'#16a34a', 1:'#22c55e', 2:'#f59e0b', 3:'#ef4444', 4:'#8b5cf6'};
-    const snCanvasColor = isOver ? '#16a34a' : (SN_CANVAS_COLORS[trong] || '#94a3b8');
-    c.fillStyle = snCanvasColor; c.font='bold 11px sans-serif';
-    c.fillText(isOver ? '✓' : (trong > 0 ? trong + ' ng' : '0'), 540, y+21);
+    const trong = isOver ? 0 : (typeof snVal === 'number' ? snVal : getTrongCount(st,mnv,ngay,item));
+    c.fillStyle=!isOver?'#ef4444':'#16a34a'; c.font='bold 10px sans-serif';
+    c.fillText(isOver?'✓':trong+' ng',540,y+21);
     // Dùng sao
     c.fillStyle=!isOver?'#ef4444':'#94a3b8'; c.font='bold 10px sans-serif';
     c.fillText(!isOver?`-${item.tru}⭐`:sp||'+5⭐',590,y+22);
@@ -4752,8 +4644,6 @@ async function saveThuongTruToSheets(){
     if(p20) n.pct20=parseInt(p20.value)||200;
     if(tru) n.tru=parseInt(tru.value)||50;
   });
-  // Bake target cố định cho NV
-  ['TGDĐ','Topzone'].forEach(s => bakeCtNvTargets(s));
   saveState();
   if(API_URL){
     try{ await callAPIPost('saveConfig',{config:CONFIG}); showToast('✅ Đã lưu & đồng bộ lên Sheets!'); }
@@ -5363,8 +5253,6 @@ async function qtSaveToSheets(){
     item.pct5 = p5; item.pct10 = p10; item.pct20 = p20;
   });
 
-  // Bake target cố định cho từng NV trước khi đẩy lên
-  ['TGDĐ','Topzone'].forEach(s => bakeCtNvTargets(s));
   saveState(); // lưu local
   activeChips.clear();
 
@@ -5392,35 +5280,26 @@ async function qtSaveToSheets(){
 const CONFIG_PULL_KEY = 'config_last_pull';
 const CONFIG_PULL_INTERVAL = 5 * 60 * 1000; // 5 phút pull 1 lần
 
-async function autoSyncConfigForNv(forceRefresh=false){
+async function autoSyncConfigForNv(){
+  // Chỉ NV mới cần pull; QL tự quản lý
+  if(currentRole !== 'nv') return;
   if(!API_URL) return;
   const lastPull = LS.get(CONFIG_PULL_KEY) || 0;
-  const shouldPull = forceRefresh || (Date.now() - lastPull >= CONFIG_PULL_INTERVAL);
-  if(!shouldPull) return;
+  if(Date.now() - lastPull < CONFIG_PULL_INTERVAL) return;
   try{
-    // getConfig không cần auth — dùng callAPIPublic cho chắc
-    const r = await callAPIPublic('getConfig', {});
+    const r = await callAPIPost('getConfig', {});
     if(r && r.config){
       CONFIG = r.config;
-      // Bake target cố định cho NV
-      ['TGDĐ','Topzone'].forEach(s => bakeCtNvTargets(s));
       saveState();
       activeChips.clear();
       LS.set(CONFIG_PULL_KEY, Date.now());
-      // Rebuild dropdown NV để phản ánh danh sách NV mới từ Trang tính
-      const curSt = document.getElementById('sel-st')?.value;
-      if(curSt){ onSelSt(); }
-      if(currentRole==='nv' && currentNvLogin){
-        const nvSel = document.getElementById('sel-nv');
-        if(nvSel) nvSel.value = currentNvLogin;
-      }
-      // Nếu đang xem báo cáo → refresh để áp target mới
+      // Nếu NV đang xem báo cáo, refresh lại để áp target mới
       const selSt  = document.getElementById('sel-st')?.value;
       const selMnv = document.getElementById('sel-nv')?.value;
       const selNgay= document.getElementById('sel-ngay')?.value;
-      if(selSt && selMnv && selNgay && !forceRefresh){
-        onSelNv();
-        showToast('🔄 Target + danh sách NV đã cập nhật từ Trang tính!', 3000);
+      if(selSt && selMnv && selNgay){
+        onSelNv(); // re-render báo cáo với config mới
+        showToast('🔄 Target đã được cập nhật từ QL!', 3000);
       }
     }
   }catch(e){ /* silent — dùng config local */ }
