@@ -1036,15 +1036,33 @@ body.role-ql .ql-only-flex{display:flex}
   <div class="login-box">
     <div class="login-logo">⭐</div>
     <div class="login-title">BÁO CÁO KẾT QUẢ</div>
-    <div class="login-sub">Topzone / TGDĐ — Vui lòng đăng nhập<br/><span style="font-size:11px;color:#94a3b8">NV: mật khẩu = 2 số cuối mã NV</span></div>
+    <div class="login-sub">Topzone / TGDĐ</div>
+
+    <!-- Tab chọn vai trò -->
     <div class="login-role-tabs">
-      <button class="lrole on" onclick="setRole('nv',this)">👤 Nhân viên</button>
-      <button class="lrole" onclick="setRole('ql',this)">🔑 Quản lý</button>
+      <button class="lrole on" id="tab-nv" onclick="switchLoginTab('nv')">👤 Nhân viên</button>
+      <button class="lrole" id="tab-ql" onclick="switchLoginTab('ql')">🔑 Quản lý</button>
     </div>
-    <input class="login-input" id="login-un" type="text" placeholder="Mã NV hoặc Tên đăng nhập" maxlength="30"
-    style="letter-spacing:2px;margin-bottom:10px"
-    onkeydown="if(event.key==='Enter')document.getElementById('login-pw').focus()"/>
-  <input class="login-input" id="login-pw" type="password" placeholder="Mật khẩu" maxlength="20" onkeyup="if(event.key==='Enter')doLogin()"/>
+
+    <!-- NV: nhập 3 số cuối mã NV → preview tên + ST -->
+    <div id="login-nv-panel">
+      <div style="font-size:11px;color:var(--t2);margin-bottom:8px;font-weight:600">Nhập 3 số cuối mã nhân viên</div>
+      <input class="login-input" id="login-nv-code" type="tel" inputmode="numeric" placeholder="VD: 623" maxlength="6"
+        style="letter-spacing:6px;font-size:20px;margin-bottom:8px"
+        oninput="previewNv(this.value)"
+        onkeyup="if(event.key==='Enter')doLogin()"/>
+      <!-- Preview kết quả tìm kiếm -->
+      <div id="nv-preview" style="min-height:48px;margin-bottom:8px"></div>
+    </div>
+
+    <!-- QL: nhập mật khẩu -->
+    <div id="login-ql-panel" style="display:none">
+      <div style="font-size:11px;color:var(--t2);margin-bottom:8px;font-weight:600">Nhập mật khẩu quản lý</div>
+      <input class="login-input" id="login-pw" type="password" placeholder="••••" maxlength="20"
+        style="letter-spacing:8px;font-size:20px;margin-bottom:8px"
+        onkeyup="if(event.key==='Enter')doLogin()"/>
+    </div>
+
     <button class="login-btn" id="login-btn" onclick="doLogin()">🔐 Đăng nhập</button>
     <div class="login-err" id="login-err"></div>
   </div>
@@ -1650,125 +1668,122 @@ const LS = {
 };
 
 /* ═══════════════════════════════
-   AUTH
+   AUTH — Đơn giản hóa
+   NV: nhập 3 số cuối mã → tìm trong CONFIG → vào luôn
+   QL: nhập mật khẩu 2026 → vào
 ═══════════════════════════════ */
 let currentRole = null; // 'nv' | 'ql'
 let loginRoleMode = 'nv';
+const QL_PASSWORD = '2026';
 
-function setRole(role, el){
+function switchLoginTab(role){
   loginRoleMode = role;
   document.querySelectorAll('.lrole').forEach(b=>b.classList.remove('on'));
-  el.classList.add('on');
-  document.getElementById('login-pw').value='';
+  document.getElementById('tab-'+role).classList.add('on');
+  document.getElementById('login-nv-panel').style.display = role==='nv' ? '' : 'none';
+  document.getElementById('login-ql-panel').style.display = role==='ql' ? '' : 'none';
   document.getElementById('login-err').textContent='';
+  document.getElementById('nv-preview').innerHTML='';
+  if(role==='nv') document.getElementById('login-nv-code').focus();
+  else document.getElementById('login-pw').focus();
 }
 
-async function doLogin(){
-  const pw = document.getElementById('login-pw').value.trim();
-  const err = document.getElementById('login-err');
-  const btn = document.getElementById('login-btn');
-  if(!pw){ err.textContent='❌ Vui lòng nhập mật khẩu!'; return; }
-  
-  // Xác định username
-  const unEl = document.getElementById('login-un');
-  let username = unEl ? unEl.value.trim() : '';
-  // Nếu không nhập username → dùng password làm username (tương thích MNV = password)
-  if(!username) username = pw;
+// Preview NV khi gõ — tìm theo 3 số cuối mã NV
+function previewNv(code){
+  const el = document.getElementById('nv-preview');
+  const q = code.trim();
+  if(!q){ el.innerHTML=''; return; }
+  const found = _findNvByCode(q);
+  if(found.length === 0){
+    el.innerHTML = `<div style="color:var(--t3);font-size:12px;text-align:center;padding:8px">Không tìm thấy nhân viên</div>`;
+  } else if(found.length === 1){
+    const nv = found[0];
+    el.innerHTML = `<div style="background:var(--g2);border:1.5px solid var(--g);border-radius:10px;padding:10px 14px;text-align:center">
+      <div style="font-size:16px;font-weight:800;color:var(--t1)">${nv.ten}</div>
+      <div style="font-size:12px;color:var(--t2);margin-top:3px">${nv.st} · ${nv.mnv}</div>
+    </div>`;
+  } else {
+    // Nhiều kết quả → hiện list để chọn
+    const rows = found.map(nv=>`
+      <div onclick="selectNv('${nv.mnv}','${nv.st}')"
+        style="padding:8px 12px;border-radius:8px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;border:1px solid var(--bd);margin-bottom:4px;background:var(--bg3)">
+        <span style="font-weight:700;font-size:13px">${nv.ten}</span>
+        <span style="font-size:11px;color:var(--t3)">${nv.st}</span>
+      </div>`).join('');
+    el.innerHTML = `<div style="font-size:11px;color:var(--t2);margin-bottom:5px;text-align:center">Chọn tên của bạn:</div>${rows}`;
+  }
+}
 
-  if(btn){ btn.textContent='⏳ Đang kiểm tra...'; btn.disabled=true; }
+// Tìm NV theo 3 số cuối (hoặc toàn bộ mã)
+function _findNvByCode(code){
+  const results = [];
+  for(const st of ['TGDĐ','Topzone']){
+    for(const nv of (CONFIG[st]?.nv||[])){
+      const mnv = String(nv.mnv);
+      if(mnv.endsWith(code) || mnv === code){
+        results.push({...nv, st});
+      }
+    }
+  }
+  return results;
+}
+
+// Khi user click chọn NV từ danh sách nhiều kết quả
+function selectNv(mnv, st){
+  const nv = CONFIG[st]?.nv?.find(n=>String(n.mnv)===String(mnv));
+  if(!nv) return;
+  document.getElementById('nv-preview').innerHTML = `
+    <div style="background:var(--g2);border:1.5px solid var(--g);border-radius:10px;padding:10px 14px;text-align:center">
+      <div style="font-size:16px;font-weight:800;color:var(--t1)">${nv.ten}</div>
+      <div style="font-size:12px;color:var(--t2);margin-top:3px">${st} · ${mnv}</div>
+    </div>`;
+  // Lưu lựa chọn vào input ẩn
+  document.getElementById('login-nv-code').dataset.selectedMnv = mnv;
+  document.getElementById('login-nv-code').dataset.selectedSt  = st;
+}
+
+function doLogin(){
+  const err = document.getElementById('login-err');
   err.textContent='';
 
-  // === Nếu chưa có API URL: dùng local fallback (offline mode) ===
-  if(!API_URL){
-    _localFallbackLogin(loginRoleMode, username, pw, err, btn);
-    return;
+  if(loginRoleMode === 'ql'){
+    // ── QL ──
+    const pw = document.getElementById('login-pw').value.trim();
+    if(!pw){ err.textContent='❌ Nhập mật khẩu!'; return; }
+    if(pw !== QL_PASSWORD){ err.textContent='❌ Mật khẩu không đúng!'; document.getElementById('login-pw').value=''; return; }
+    SESSION_USER_ID = 'QL_ADMIN';
+    SESSION_TOKEN   = 'local_ql';
+    LS.set('bc_session', { token: SESSION_TOKEN, userId: SESSION_USER_ID, role:'ql', ts: Date.now() });
+    LS.del('bc_nv_login');
+    currentNvLogin = null;
+    enterApp('ql');
+
+  } else {
+    // ── NV ──
+    const inp = document.getElementById('login-nv-code');
+    const code = inp.value.trim();
+    if(!code){ err.textContent='❌ Nhập mã nhân viên!'; return; }
+
+    // Ưu tiên lựa chọn từ dataset (khi có nhiều kết quả)
+    let mnv = inp.dataset.selectedMnv || null;
+    let st  = inp.dataset.selectedSt  || null;
+
+    if(!mnv){
+      const found = _findNvByCode(code);
+      if(found.length === 0){ err.textContent='❌ Không tìm thấy nhân viên!'; return; }
+      if(found.length > 1){ err.textContent='⚠️ Có nhiều kết quả — hãy chọn tên của bạn bên trên!'; return; }
+      mnv = String(found[0].mnv);
+      st  = found[0].st;
+    }
+
+    currentNvLogin  = mnv;
+    SESSION_USER_ID = mnv;
+    SESSION_TOKEN   = 'local_nv_' + mnv;
+    LS.set('bc_nv_login', mnv);
+    LS.set('bc_session', { token: SESSION_TOKEN, userId: mnv, role:'nv', ts: Date.now() });
+    NV_ACCOUNTS[mnv] = { mk: code, st, ten: (CONFIG[st]?.nv?.find(n=>String(n.mnv)===mnv)?.ten||'') };
+    enterApp('nv');
   }
-
-  // === Gọi Apps Script để xác thực ===
-  try {
-    const r = await callAPIPublic('login', {
-      username: username,
-      password: pw,
-      role: loginRoleMode,
-    });
-    if(btn){ btn.textContent='🔐 Đăng nhập'; btn.disabled=false; }
-
-    if(r && r.ok && r.user && r.token){
-      // Lưu session kèm timestamp để kiểm tra hết hạn 72h
-      SESSION_TOKEN  = r.token;
-      SESSION_USER_ID= r.user.id;
-      const sessionData = { token: r.token, userId: r.user.id, role: r.user.role, ts: Date.now() };
-      LS.set('bc_session', sessionData);
-
-      if(r.user.role === 'nv'){
-        currentNvLogin = r.user.id;
-        NV_ACCOUNTS[r.user.id] = { mk: pw, st: r.user.store, ten: r.user.name };
-        LS.set('bc_nv_login', r.user.id);
-        LS.set('bc_nv_cache_' + r.user.id, r.user);
-        enterApp('nv');
-      } else if(r.user.role === 'ql'){
-        // Lưu hash pw QL ngay tại đây — trước khi input bị clear
-        _saveQlPwHash(pw);
-        currentNvLogin = null;
-        LS.del('bc_nv_login');
-        enterApp('ql');
-      } else {
-        err.textContent='❌ Vai trò không hợp lệ!';
-      }
-    } else {
-      err.textContent='❌ ' + (r?.error || 'Mật khẩu không đúng!');
-      document.getElementById('login-pw').value='';
-    }
-  } catch(e) {
-    if(btn){ btn.textContent='🔐 Đăng nhập'; btn.disabled=false; }
-    console.warn('Sheets auth failed, using offline fallback:', e.message);
-    _localFallbackLogin(loginRoleMode, username, pw, err, btn);
-  }
-}
-
-// Offline fallback: dùng NV_ACCOUNTS đã cache
-function _localFallbackLogin(role, username, pw, err, btn){
-  if(role === 'nv'){
-    // Tìm trong cache
-    let foundMnv = null;
-    const savedUser = LS.get('bc_nv_cache_' + username);
-    if(savedUser && LS.get('bc_nv_cache_pw_' + username) === pw){
-      foundMnv = username;
-    } else {
-      // Tìm theo mk (2 số cuối)
-      for(const [mnv, acc] of Object.entries(NV_ACCOUNTS)){
-        if(pw === acc.mk || pw === mnv){ foundMnv = mnv; break; }
-      }
-    }
-    if(foundMnv){
-      currentNvLogin = foundMnv;
-      SESSION_USER_ID = foundMnv;
-      SESSION_TOKEN = 'offline_' + foundMnv; // offline token
-      LS.set('bc_nv_login', foundMnv);
-      enterApp('nv');
-    } else {
-      if(err) err.textContent='❌ Mật khẩu không đúng! (Offline mode)';
-      const pwEl = document.getElementById('login-pw');
-      if(pwEl) pwEl.value='';
-    }
-  } else if(role === 'ql'){
-    // QL offline: check saved hash
-    const savedQlPw = LS.get('bc_ql_pw_hash');
-    if(savedQlPw && savedQlPw === _simpleHash(pw)){
-      SESSION_USER_ID = 'QL_ADMIN';
-      SESSION_TOKEN = 'offline_QL_' + pw;
-      LS.del('bc_nv_login');
-      enterApp('ql');
-    } else if(!savedQlPw){
-      // Chưa từng login online — không cho login offline để bảo mật
-      if(err) err.textContent='❌ Cần kết nối Sheets lần đầu để xác thực!';
-    } else {
-      if(err) err.textContent='❌ Mật khẩu không đúng!';
-      const pwEl = document.getElementById('login-pw');
-      if(pwEl) pwEl.value='';
-    }
-  }
-  if(btn){ btn.textContent='🔐 Đăng nhập'; btn.disabled=false; }
 }
 
 function _simpleHash(s){
@@ -1835,10 +1850,13 @@ function doLogout(){
   currentRole = null;
   currentNvLogin = null;
   const pwEl = document.getElementById('login-pw');
-  const unEl = document.getElementById('login-un');
+  const nvCode = document.getElementById('login-nv-code');
   if(pwEl) pwEl.value='';
-  if(unEl) unEl.value='';
+  if(nvCode){ nvCode.value=''; nvCode.dataset.selectedMnv=''; nvCode.dataset.selectedSt=''; }
   document.getElementById('login-err').textContent='';
+  document.getElementById('nv-preview').innerHTML='';
+  // Reset về tab NV
+  switchLoginTab('nv');
   document.getElementById('login-screen').style.display='flex';
   document.getElementById('login-screen').style.opacity='1';
 }
