@@ -2631,10 +2631,9 @@ function getPrevDaySao(st, mnv, ngay){
 }
 
 function loadSaoDangCo(st, mnv, ngayHienTai){
-  // Sao từ báo cáo các ngày (trừ ngày hiện tại)
+  // Sao lũy kế = tổng tất cả ngày đã lưu (bao gồm cả hôm nay nếu đã lưu)
   let fromBC=0;
   LS.keys(`bc:${st}:${mnv}:`).forEach(k=>{
-    if(k===`bc:${st}:${mnv}:${ngayHienTai}`) return;
     const d = LS.get(k);
     if(d && d.sao_net) fromBC += d.sao_net;
   });
@@ -2856,14 +2855,13 @@ function rowHtml(item, ct_nv, actual, pct, trong, savedSoNgay, savedDungSao, sao
   const isOver100 = pct >= (item.pct5||100)/100;
   let soNgayVal;
   let soNgayIsAuto = false;
-  if(isOver100){
-    soNgayVal = 0;
-  } else if(typeof savedSoNgay === 'number'){
+  if(typeof savedSoNgay === 'number'){
     soNgayVal = savedSoNgay;
   } else {
     soNgayVal = _getPrevSoNgay(item);
     soNgayIsAuto = soNgayVal > 0;
   }
+  if(isOver100) soNgayVal = 0; // đạt rồi → số ngày = 0
   const canhBaoHtml = canhBaoNgay ? `<div style="font-size:9px;color:var(--r);font-weight:700;margin-top:2px;text-align:center">⚠️ Check lại</div>` : '';
   const snBorderColor = canhBaoNgay ? 'var(--r)' : soNgayIsAuto ? 'var(--a)' : 'var(--bd2)';
   const snColor = soNgayIsAuto ? 'var(--a)' : 'var(--t1)';
@@ -2882,8 +2880,8 @@ function rowHtml(item, ct_nv, actual, pct, trong, savedSoNgay, savedDungSao, sao
     // saoCuHienTai đã được tính là sao còn lại sau khi trừ các môn khác đang active
     const canTru = saoCuHienTai >= item.tru;
     if(dungSaoActive){
-      // Active: icon vàng sáng, hiện số sao, nhấn để tắt + reset số ngày
-      truSaoHtml = `<div style="text-align:center;cursor:pointer" onclick="toggleDungSao('${iid}')" title="Đang trừ ${item.tru}⭐ — Nhấn để huỷ & reset số ngày về 0">
+      // Active: icon vàng sáng, hiện số sao, nhấn để tắt
+      truSaoHtml = `<div style="text-align:center;cursor:pointer" onclick="toggleDungSao('${iid}')" title="Đang trừ ${item.tru}⭐ — Nhấn để huỷ">
         <div style="font-size:22px;line-height:1;filter:drop-shadow(0 0 6px #fbbf24)">⭐</div>
         <div style="font-size:9px;font-weight:800;color:var(--r);margin-top:1px">−${item.tru}</div>
       </div>`;
@@ -2894,7 +2892,7 @@ function rowHtml(item, ct_nv, actual, pct, trong, savedSoNgay, savedDungSao, sao
       </div>`;
     } else {
       // Inactive: icon mờ, nhấn để dùng sao
-      truSaoHtml = `<div style="text-align:center;cursor:pointer;opacity:.55" onclick="toggleDungSao('${iid}')" title="Nhấn để dùng ${item.tru}⭐ trừ môn này & reset số ngày về 0">
+      truSaoHtml = `<div style="text-align:center;cursor:pointer;opacity:.55" onclick="toggleDungSao('${iid}')" title="Nhấn để dùng ${item.tru}⭐ trừ môn này">
         <div style="font-size:22px;line-height:1">⭐</div>
         <div style="font-size:9px;font-weight:700;color:var(--t2);margin-top:1px">−${item.tru}</div>
       </div>`;
@@ -3121,14 +3119,15 @@ function onInputChange(){
     }
     const chkEl=row.querySelector('input[type=checkbox]');
     if(chkEl) chkEl.checked=pct>=pctThresh;
-    // Nếu vừa đạt >100% → reset soNgay về 0 (read-only)
+    // Nếu vừa đạt >100% → disable soNgay (không reset giá trị)
     const snEl=document.getElementById('sn_'+iid);
     if(snEl){
       if(pct>=pctThresh){
-        snEl.value=0;
         snEl.disabled=true;
+        snEl.style.opacity='.4';
       } else {
         snEl.disabled=false;
+        snEl.style.opacity='';
       }
     }
   });
