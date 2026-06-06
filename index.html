@@ -1081,7 +1081,7 @@ body.role-ql .ql-only-flex{display:flex}
   <button class="nav-btn" onclick="showPage('bxh-sao')">🏆 BXH Sao</button>
   <button class="nav-btn ql-only" onclick="showPage('bxh-thidua')">🎖 Thi đua</button>
   <button class="nav-btn ql-only" onclick="showPage('thuong-tru')">⭐ T/T Sao</button>
-  <button class="nav-btn ql-only" onclick="showPage('sao-tich-luy')">💰 Sao TL</button>
+  <button class="nav-btn ql-only" onclick="showPage('sao-tich-luy')">🌟 Lũy Kế</button>
   <button class="nav-btn ql-only" onclick="openQlRecManager()">📋 BC NV</button>
   <button class="nav-btn" onclick="showPage('phan-tich')">📈 Phân tích</button>
   <button class="nav-btn" onclick="showPage('cai-dat')">⚙️ Cài đặt</button>
@@ -1217,6 +1217,7 @@ body.role-ql .ql-only-flex{display:flex}
       <option value="Topzone">Topzone</option>
     </select>
     <button class="btn btn-p" onclick="qtAddMon()">+ Thêm môn</button>
+    <button class="btn btn-s" onclick="qtAddThuongThem()" style="color:var(--g);border-color:rgba(16,217,122,.4)">🎁 + Thưởng Thêm</button>
     <button class="btn btn-g" onclick="qtSaveToSheets()" style="min-width:140px">☁️ Lưu & Đồng bộ NV</button>
     <button class="btn btn-s" onclick="pullFromSheets()">⬇️ Kéo từ Sheets</button>
   </div>
@@ -1463,46 +1464,74 @@ body.role-ql .ql-only-flex{display:flex}
 <!-- ══ PAGE: SAO TÍCH LŨY (QL only) ══ -->
 <div id="page-sao-tich-luy" class="page">
   <div class="hdr">
-    <div><div class="hdr-title">SAO TÍCH LŨY</div><div class="hdr-sub">QL quản lý sao đầu tháng — đồng bộ ngay cho NV</div></div>
+    <div><div class="hdr-title">SAO LŨY KẾ</div><div class="hdr-sub">QL xem & điều chỉnh sao lũy kế của nhân viên</div></div>
   </div>
+
+  <!-- Hướng dẫn -->
+  <div class="settings-card" style="margin-bottom:10px;background:var(--bg3);border:1.5px solid var(--p);border-radius:10px;padding:12px 16px">
+    <div style="font-size:12px;line-height:2;color:var(--t1)">
+      <b style="color:var(--p);font-size:13px">📌 Hướng dẫn</b><br/>
+      <b>🌟 Sao lũy kế</b> = tổng sao NV đang có (tích lũy từ báo cáo hàng ngày + thưởng thêm QL nhập).<br/>
+      <b>✏️ QL điều chỉnh:</b> Nhấn nút <b style="color:var(--a)">✏️ Điều chỉnh</b> để sửa lại con số lũy kế cho đúng thực tế (VD: chuyển tháng, bù lỗi).<br/>
+      <b>🎁 Thưởng thêm:</b> Thưởng ngoài thi đua, không trừ sao — bắt buộc ghi rõ lý do.
+    </div>
+  </div>
+
+  <!-- Summary cards -->
+  <div class="settings-card" style="margin-bottom:10px">
+    <div class="settings-title" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+      <span>🌟 Sao lũy kế hiện tại</span>
+      <select id="stl-st" onchange="renderSaoTichLuy()" class="tbl-sel" style="font-size:12px;padding:6px 10px">
+        <option value="TGDĐ">TGDĐ</option>
+        <option value="Topzone">Topzone</option>
+      </select>
+    </div>
+    <div id="stl-luykе-cards" style="display:flex;flex-wrap:wrap;gap:10px;margin-top:10px;min-height:60px">
+      <span style="color:var(--t3);font-size:12px">⏳ Đang tải...</span>
+    </div>
+  </div>
+
+  <!-- Bảng lũy kế + điều chỉnh -->
   <div class="settings-card">
     <div class="settings-title" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
-      <span>💰 Bảng sao tích lũy nhân viên</span>
-      <div style="display:flex;gap:7px;flex-wrap:wrap">
-        <select id="stl-st" onchange="renderSaoTichLuy()" class="tbl-sel" style="font-size:12px;padding:6px 10px">
-          <option value="TGDĐ">TGDĐ</option>
-          <option value="Topzone">Topzone</option>
-        </select>
-        <button class="btn btn-g" onclick="saveSaoTichLuyToSheets()">☁️ Lưu & Đồng bộ</button>
-        <a href="https://docs.google.com/spreadsheets/d/1YL6npMl6AtfSYBP1SFjRwKT4QEC3dJrRE4ww5y-Ey3M/edit?gid=1793741515#gid=1793741515" target="_blank" class="btn btn-s" style="text-decoration:none;display:inline-flex;align-items:center;gap:5px;font-size:12px;padding:8px 14px">📄 Sheets</a>
-      </div>
-    </div>
-    <div style="font-size:11px;color:var(--t3);line-height:1.7;margin:8px 0 12px">
-      📌 QL nhập <b>Sao tích lũy đầu tháng</b> cho từng nhân viên. Nhân viên chỉ xem, không chỉnh sửa.<br/>
-      🔄 Sau khi nhấn <b>Lưu & Đồng bộ</b>, số sao sẽ được cập nhật ngay cho tất cả nhân viên.
+      <span>🌟 Bảng lũy kế & điều chỉnh</span>
+      <a href="https://docs.google.com/spreadsheets/d/1YL6npMl6AtfSYBP1SFjRwKT4QEC3dJrRE4ww5y-Ey3M/edit?gid=1793741515#gid=1793741515" target="_blank" class="btn btn-s" style="text-decoration:none;display:inline-flex;align-items:center;gap:5px;font-size:12px;padding:8px 14px">📄 Sheets</a>
     </div>
     <div class="sheet-wrap"><table class="sheet" id="stl-table">
       <thead><tr>
         <th style="width:36px">STT</th>
         <th>Mã NV</th>
         <th>Tên nhân viên</th>
-        <th>⭐ Sao tích lũy</th>
-        <th>🌟 Lũy kế hiện tại</th>
-        <th>Ngày cập nhật</th>
-        <th>Cập nhật bởi</th>
-        <th>Lịch sử</th>
+        <th style="background:color-mix(in srgb,var(--g) 12%,var(--bg2))">🌟 Sao lũy kế</th>
+        <th>Cập nhật lúc</th>
+        <th>Hành động</th>
       </tr></thead>
       <tbody id="stl-body"></tbody>
     </table></div>
-    <div class="sheet-note" style="margin-top:10px">
-      💡 <b>Công thức:</b> Sao hiện có = Sao TL đầu tháng + Sao kiếm được tháng này − Sao đã dùng<br/>
-      📋 <b>Lịch sử:</b> Mọi thay đổi đều được ghi lại để kiểm tra. Sao tích lũy không được âm.
-    </div>
   </div>
+
   <!-- Audit log -->
   <div class="settings-card" style="margin-top:10px">
-    <div class="settings-title">📋 Lịch sử thay đổi sao tích lũy</div>
+    <div class="settings-title">📋 Lịch sử điều chỉnh lũy kế</div>
     <div id="stl-audit-log" style="max-height:240px;overflow-y:auto"></div>
+  </div>
+</div>
+
+<!-- Modal điều chỉnh lũy kế -->
+<div id="lk-edit-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9000;align-items:center;justify-content:center" onclick="closeLkEdit(event)">
+  <div style="background:var(--bg1);border-radius:14px;padding:22px 24px;width:min(380px,92vw);box-shadow:0 8px 40px rgba(0,0,0,.35)" onclick="event.stopPropagation()">
+    <div style="font-size:16px;font-weight:800;margin-bottom:4px">✏️ Điều chỉnh sao lũy kế</div>
+    <div id="lk-edit-sub" style="font-size:12px;color:var(--t3);margin-bottom:16px"></div>
+    <div style="font-size:12px;font-weight:600;margin-bottom:6px">🌟 Sao lũy kế mới</div>
+    <input id="lk-edit-val" type="number" min="0" step="0.5"
+      style="width:100%;border:2px solid var(--a);border-radius:8px;padding:10px 14px;font-size:20px;font-weight:800;text-align:center;background:var(--bg2);color:var(--a);font-family:inherit;box-sizing:border-box;margin-bottom:12px"/>
+    <div style="font-size:12px;font-weight:600;margin-bottom:6px">📝 Lý do điều chỉnh <span style="color:var(--r)">*</span></div>
+    <textarea id="lk-edit-note" placeholder="Bắt buộc nhập lý do (VD: Chuyển tháng 5→6, bù lỗi nhập sai...)"
+      style="width:100%;border:1.5px solid var(--bd2);border-radius:8px;padding:10px 12px;font-size:13px;font-family:inherit;background:var(--bg2);color:var(--t1);resize:vertical;min-height:70px;box-sizing:border-box;margin-bottom:16px"></textarea>
+    <div style="display:flex;gap:10px">
+      <button class="btn btn-g" style="flex:1;font-size:14px;font-weight:700" onclick="confirmLkEdit()">✅ Xác nhận lưu</button>
+      <button class="btn btn-s" style="flex:1" onclick="document.getElementById('lk-edit-overlay').style.display='none'">✕ Huỷ</button>
+    </div>
   </div>
 </div>
 
@@ -2765,7 +2794,7 @@ function _reRenderBaoCaoFromChip(st){
 }
 
 function buildChipBar(st){
-  const nhs = CONFIG[st].nh;
+  const nhs = CONFIG[st].nh.filter(i=>!i.is_thuong_them);
   // Lần đầu: chọn tất cả môn của ST hiện tại (reset chip từ ST khác)
   const nhSet = new Set(nhs.map(i=>i.nh));
   // Xóa chip của ST cũ (không thuộc ST mới)
@@ -2964,7 +2993,7 @@ function rowHtml(item, ct_nv, actual, pct, trong, savedSoNgay, savedDungSao, sao
 }
 function renderBaoCao(st, nv, mnv, ngay, saved, note, checklist, saoOverride, savedSoNgay){
   _renderContext = {st, mnv, ngay};
-  const nhs = CONFIG[st].nh.filter(i=>activeChips.has(i.nh));
+  const nhs = CONFIG[st].nh.filter(i=>activeChips.has(i.nh) && !i.is_thuong_them);
   const {saoDat,saoDuong,saoAm,net} = calcSummary(st,mnv,CONFIG[st].nh,saved);
   // saoCu = sao lũy kế hiện tại (lấy từ UI element sao-luy-ke đã được fetch từ Sheets)
   const saoCu = getSaoCuFromUI();
@@ -2974,7 +3003,7 @@ function renderBaoCao(st, nv, mnv, ngay, saved, note, checklist, saoOverride, sa
   html+=`<div style="background:var(--g2);border:1px solid rgba(16,217,122,.3);border-radius:var(--rad);padding:10px 14px;margin-bottom:10px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
     <div style="flex:1">
       <div style="font-size:10px;font-weight:700;color:var(--g);text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px">🌟 Sao lũy kế hiện tại</div>
-      <div style="font-size:11px;color:var(--t2)">Tự động đồng bộ từ Sheets — dùng làm sao đầu vào cho tính toán</div>
+      <div style="font-size:11px;color:var(--t2)">Tổng sao tích lũy — đồng bộ từ Sheets · Sao hôm nay &amp; thưởng thêm sẽ cộng vào sau khi lưu</div>
     </div>
     <div style="display:flex;align-items:center;gap:8px">
       <div style="font-size:28px;font-weight:800;color:var(--g);line-height:1" id="sao-luy-ke-bc">${saoCu}</div>
@@ -3047,9 +3076,29 @@ function renderBaoCao(st, nv, mnv, ngay, saved, note, checklist, saoOverride, sa
     <div class="tip-body">${genTips(incomplete,complete,net)}</div>
   </div>`;
 
+  // 🎁 THƯỞNG THÊM — chỉ hiển thị khi ST có môn Thưởng Thêm trong config
+  const hasThuongThem = CONFIG[st]?.nh?.some(n=>n.is_thuong_them) || false;
+  const thuongThem = saved['__thuong_them__'] || 0;
+  if(hasThuongThem){
+  html+=`<div style="background:color-mix(in srgb,var(--g) 10%,var(--bg2));border:1.5px solid var(--g);border-radius:var(--rad);padding:12px 14px;margin:10px 0">
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <div style="flex:1;min-width:160px">
+        <div style="font-size:13px;font-weight:800;color:var(--g)">🎁 Thưởng Thêm</div>
+        <div style="font-size:11px;color:var(--t3);margin-top:2px">Thưởng ngoài thi đua — không trừ sao, cộng thẳng vào lũy kế.<br/>⚠️ Bắt buộc ghi rõ lý do vào <b>Ghi chú cuối ca</b> mới lưu được.</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <input type="number" id="inp-thuong-them" min="0" step="0.5" value="${thuongThem||''}" placeholder="0"
+          style="width:80px;border:2px solid var(--g);border-radius:8px;padding:8px 10px;font-size:18px;font-weight:800;text-align:center;background:var(--bg2);color:var(--g);font-family:inherit"
+          oninput="onInputChange()"/>
+        <span style="font-size:18px">⭐</span>
+      </div>
+    </div>
+  </div>`;
+  } // end if hasThuongThem
+
   html+=`<div class="bottom-grid">
     <div class="bb"><div class="bb-title">✅ Checklist công việc</div><textarea id="bc-checklist" placeholder="Ghi việc cần làm...">${checklist}</textarea></div>
-    <div class="bb"><div class="bb-title">📝 Ghi chú cuối ca</div><textarea id="bc-note" placeholder="Lý do chưa đạt, kế hoạch...">${note}</textarea></div>
+    <div class="bb"><div class="bb-title">📝 Ghi chú cuối ca <span id="note-required-badge" style="display:none;color:var(--r);font-size:10px;font-weight:700"> ← Bắt buộc (có Thưởng Thêm)</span></div><textarea id="bc-note" placeholder="Lý do chưa đạt, kế hoạch..." oninput="onNoteChange()">${note}</textarea></div>
   </div>`;
 
   html+=`<div class="summary-bar">
@@ -3060,13 +3109,14 @@ function renderBaoCao(st, nv, mnv, ngay, saved, note, checklist, saoOverride, sa
     <div class="sb-right">
       <div class="sb-stat"><div class="n" id="sum-duong">+${saoDuong}</div><div class="l">Sao thưởng</div></div>
       <div class="sb-stat"><div class="n" style="color:#fca5a5" id="sum-am">-${saoAm}</div><div class="l">Sao trừ</div></div>
+      <div class="sb-stat"><div class="n" style="color:var(--g)" id="sum-thuong">+${thuongThem||0}</div><div class="l">🎁 Thưởng</div></div>
       <div class="sao-badge"><div class="n" id="sum-net">${net}</div><div class="l">★ Hôm nay</div></div>
     </div>
   </div>`;
 
   html+=`<div class="tong-ket">
     <div><div class="tk-big">ĐẠT ${saoDatReal} / ${nhs.length}</div><div class="tk-sm">Môn hoàn thành trong ngày</div></div>
-    <div class="tk-sao"><div class="l">Số sao đang có</div><div class="n" id="tk-total">★ ${saoCu+net}</div></div>
+    <div class="tk-sao"><div class="l">Số sao đang có</div><div class="n" id="tk-total">★ ${saoCu+net+(thuongThem||0)}</div></div>
   </div>`;
 
   html+=`<div class="btn-row">
@@ -3095,8 +3145,13 @@ function genTips(incomplete, complete, net){
 }
 
 function onSaoOverrideChange(){
-  // Không còn dùng — sao lũy kế là read-only từ Sheets
   onInputChange();
+}
+function onNoteChange(){
+  // Cập nhật badge nếu có thưởng thêm
+  const thuongThem = parseFloat(document.getElementById('inp-thuong-them')?.value)||0;
+  const badge = document.getElementById('note-required-badge');
+  if(badge) badge.style.display = thuongThem > 0 ? 'inline' : 'none';
 }
 
 /* ═══════════════════════════════
@@ -3104,7 +3159,7 @@ function onSaoOverrideChange(){
 ═══════════════════════════════ */
 function getCurrentResults(st){
   const res={};
-  (CONFIG[st]?.nh||[]).forEach(item=>{
+  (CONFIG[st]?.nh||[]).filter(i=>!i.is_thuong_them).forEach(item=>{
     const iid='inp_'+item.nh.replace(/[^a-z0-9]/gi,'_');
     const el=document.getElementById(iid);
     res[item.nh]=el?parseFloat(el.value)||0:0;
@@ -3141,9 +3196,14 @@ function onInputChange(){
   if(q('sum-duong')) q('sum-duong').textContent=`+${saoDuong}`;
   if(q('sum-am')) q('sum-am').textContent=`-${saoAm}`;
   if(q('sum-net')) q('sum-net').textContent=net;
-  if(q('tk-total')) q('tk-total').textContent=`★ ${saoCu+net}`;
+  const thuongThem = parseFloat(document.getElementById('inp-thuong-them')?.value)||0;
+  if(q('sum-thuong')) q('sum-thuong').textContent=`+${thuongThem}`;
+  if(q('tk-total')) q('tk-total').textContent=`★ ${saoCu+net+thuongThem}`;
   if(q('live-am')) q('live-am').textContent=`-${saoAm}⭐ trừ`;
   if(q('live-net')) q('live-net').textContent=`${net>=0?'+':''}${net}⭐ hôm nay`;
+  // Badge cảnh báo note bắt buộc
+  const badge = document.getElementById('note-required-badge');
+  if(badge) badge.style.display = thuongThem > 0 ? 'inline' : 'none';
   CONFIG[st].nh.forEach(item=>{
     if(!activeChips.has(item.nh)) return;
     const iid='inp_'+item.nh.replace(/[^a-z0-9]/gi,'_');
@@ -3199,11 +3259,22 @@ async function saveBC(){
   const {saoDuong,saoAm,net}=calcSummary(st,mnv,nhs,results);
   const note=document.getElementById('bc-note')?.value||'';
   const checklist=document.getElementById('bc-checklist')?.value||'';
-  // saoCu = sao lũy kế hiện tại (từ Sheets, không cần override)
+  const thuongThem = Math.max(0, parseFloat(document.getElementById('inp-thuong-them')?.value)||0);
+
+  // Validate: Thưởng Thêm bắt buộc ghi chú
+  if(thuongThem > 0 && !note.trim()){
+    showToast('⚠️ Có Thưởng Thêm → Bắt buộc nhập Ghi chú cuối ca!');
+    document.getElementById('bc-note')?.focus();
+    document.getElementById('bc-note')?.style && (document.getElementById('bc-note').style.borderColor='var(--r)');
+    setTimeout(()=>{ const el=document.getElementById('bc-note'); if(el) el.style.borderColor=''; }, 2000);
+    return;
+  }
+
   const saoCu = getSaoCuFromUI();
   const record={st,mnv,ten:nv.ten,ngay,results,sao_duong:saoDuong,sao_am:saoAm,sao_net:net,note,checklist,ts:Date.now()};
   record.so_ngay_map = getCurrentSoNgay(st);
   record.dung_sao_map = {...dungSaoState};
+  if(thuongThem > 0) record.results['__thuong_them__'] = thuongThem;
   LS.set(`bc:${st}:${mnv}:${ngay}`, record);
   setSyncStatus('loading','Đang đồng bộ lên Sheets...');
   pushBCToSheets(record).then(()=>{
@@ -3216,7 +3287,6 @@ async function saveBC(){
   loadSaoDangCo(st,mnv,ngay);
   const s=document.getElementById('bc-status');
   if(s) s.textContent=`Lưu lúc ${new Date().toTimeString().slice(0,8)}`;
-  // [MỚI] Tự động xuất ảnh sau khi lưu
   setTimeout(()=>{
     try{
       drawCanvas(st,nv,mnv,ngay,CONFIG[st].nh,results, true, record.so_ngay_map);
@@ -4742,17 +4812,20 @@ function _refreshAllRelatedTabs(){
 }
 
 /* ═══════════════════════════════
-   SAO TÍCH LŨY (QL manage)
+   SAO LŨY KẾ (QL manage — direct edit)
 ═══════════════════════════════ */
-// Storage key for sao tich luy
 const STL_KEY = 'stl_data';
 const STL_AUDIT_KEY = 'stl_audit';
 
 function getStlData(){
-  return LS.get(STL_KEY) || { TGDĐ:{}, Topzone:{} };
+  return LS.get(STL_KEY) || { 'TGDĐ':{}, 'Topzone':{} };
 }
 function getStlAudit(){
   return LS.get(STL_AUDIT_KEY) || [];
+}
+function getSaoTichLuyNV(st, mnv){
+  const data = getStlData();
+  return data?.[st]?.[mnv]?.sao || 0;
 }
 
 async function renderSaoTichLuy(){
@@ -4760,185 +4833,212 @@ async function renderSaoTichLuy(){
   const st = document.getElementById('stl-st')?.value||'TGDĐ';
   const tbody = document.getElementById('stl-body');
   if(!tbody) return;
-
-  // Hiện loading
-  tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:14px;color:var(--t3)">⏳ Đang đồng bộ từ Sheets...</td></tr>`;
-
+  tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:14px;color:var(--t3)">⏳ Đang đồng bộ từ Sheets...</td></tr>`;
   const nvs = CONFIG[st]?.nv||[];
-  const stlData = getStlData();
-  if(!stlData[st]) stlData[st]={};
   const luyKeMap = {};
-
   if(API_URL){
-    // Pull STL và Lũy kế song song (Promise.all cho nhanh)
     await Promise.all(nvs.map(async nv => {
       try{
-        const r = await callAPIPost('getSaoTichLuy', { st, mnv: nv.mnv });
-        if(r && r.ok && typeof r.sao === 'number'){
-          const localUpdatedBy = stlData[st][nv.mnv]?.updatedBy;
-          if(localUpdatedBy !== 'Quản lý_pending'){
-            stlData[st][nv.mnv] = {
-              sao: r.sao,
-              updatedAt: new Date().toLocaleString('vi-VN'),
-              updatedBy: 'Sheets sync'
-            };
-          }
-        }
-      }catch(e){}
-      try{
         const lk = await callAPIPost('getSaoLuyKe', { st, mnv: nv.mnv });
-        if(lk && lk.ok) luyKeMap[nv.mnv] = lk.luyKe;
+        if(lk && lk.ok) luyKeMap[nv.mnv] = { luyKe: lk.luyKe, saoBC: lk.saoBC, saoTL: lk.saoTL, thang: lk.thang };
       }catch(e){}
     }));
-    LS.set(STL_KEY, stlData);
   } else {
-    // Offline: tính lũy kế từ local cache
+    const stlData = getStlData();
     nvs.forEach(nv=>{
       const saoTL = stlData[st]?.[nv.mnv]?.sao || 0;
       let saoBC = 0;
       LS.keys(`bc:${st}:${nv.mnv}:`).forEach(k=>{
         const d = LS.get(k); if(d && d.sao_net) saoBC += d.sao_net;
       });
-      luyKeMap[nv.mnv] = saoTL + saoBC;
+      luyKeMap[nv.mnv] = { luyKe: saoTL+saoBC, saoBC, saoTL };
     });
   }
-
-  // Render sau khi sync
   _renderSaoTichLuyTable(st, luyKeMap);
 }
 
 function _renderSaoTichLuyTable(st, luyKeMap){
-  const stlData = getStlData();
   const nvs = CONFIG[st]?.nv||[];
   const tbody = document.getElementById('stl-body');
   if(!tbody) return;
   let html = '';
   nvs.forEach((nv,i)=>{
-    const rec = stlData[st]?.[nv.mnv] || {sao:0, updatedAt:'', updatedBy:''};
-    const sao = rec.sao || 0;
-    const isSheetsSync = rec.updatedBy === 'Sheets sync';
-    const lkRec = luyKeMap?.[nv.mnv];
-    const luyKe = lkRec != null ? lkRec : '…';
-    const luyKeColor = (typeof luyKe === 'number' && luyKe >= sao) ? 'var(--g)' : 'var(--a)';
-    const luyKeTxt = typeof luyKe === 'number'
-      ? `<b style="font-size:16px;color:${luyKeColor}">${luyKe}</b> ⭐`
-      : `<span style="color:var(--t3);font-size:12px">…</span>`;
+    const rec = luyKeMap?.[nv.mnv] || {};
+    const luyKe = rec.luyKe != null ? rec.luyKe : '?';
+    const saoBC = rec.saoBC != null ? rec.saoBC : null;
+    const thang = rec.thang || '';
+    const lkColor = typeof luyKe==='number' && luyKe > 0 ? 'var(--g)' : 'var(--t2)';
+    const saoBCTxt = saoBC != null
+      ? `<span style="color:${saoBC>0?'var(--g)':saoBC<0?'var(--r)':'var(--t3)'};font-size:12px">${saoBC>=0?'+':''}${saoBC}⭐</span>`
+      : '—';
+    const audit = getStlAudit().find(a=>a.st===st && a.mnv===nv.mnv);
+    const updatedAt = audit ? audit.updatedAt : '—';
     html+=`<tr>
       <td style="text-align:center;font-weight:700;color:var(--t3)">${i+1}</td>
       <td style="font-weight:600;font-size:12px">${nv.mnv}</td>
       <td style="font-weight:700">${nv.ten}</td>
-      <td style="text-align:center">
-        <input type="number" min="0" id="stl-sao-${nv.mnv}" value="${sao}"
-          style="width:80px;border:1.5px solid var(--bd2);border-radius:6px;padding:6px 8px;font-family:inherit;font-size:16px;font-weight:800;text-align:center;background:var(--bg3);color:var(--a)"
-          oninput="stlValidate('${nv.mnv}')"/>
-        <span style="font-size:16px;margin-left:4px">⭐</span>
+      <td style="text-align:center;background:color-mix(in srgb,var(--g) 7%,var(--bg1))">
+        <span style="font-size:20px;font-weight:800;color:${lkColor}">${luyKe}</span>
+        <span style="font-size:14px"> ⭐</span>
+        ${thang?`<div style="font-size:10px;color:var(--t3)">tháng ${thang}</div>`:''}
       </td>
-      <td style="text-align:center">${luyKeTxt}</td>
-      <td style="font-size:11px;color:var(--t3)">${rec.updatedAt||'—'}</td>
-      <td style="font-size:11px;color:${isSheetsSync?'var(--g)':'var(--p)'}">${isSheetsSync?'☁️ Sheets':'✏️ '+rec.updatedBy||'—'}</td>
-      <td>
-        <button class="btn btn-s" style="font-size:11px;padding:5px 10px" onclick="showStlHistory('${nv.mnv}','${nv.ten}')">📋</button>
+      <td style="font-size:11px;color:var(--t3)">${updatedAt}</td>
+      <td style="text-align:center">
+        <button class="btn btn-s" style="font-size:11px;padding:5px 12px;color:var(--a);border-color:var(--a)"
+          onclick="openLkEdit('${nv.mnv}','${nv.ten}',${typeof luyKe==='number'?luyKe:0},'${st}')">✏️ Điều chỉnh</button>
       </td>
     </tr>`;
   });
-  tbody.innerHTML = html;
+  tbody.innerHTML = html || `<tr><td colspan="6" style="text-align:center;padding:14px;color:var(--t3)">Không có nhân viên</td></tr>`;
+  _renderStlSummaryCards(st, luyKeMap);
   renderStlAudit();
 }
 
-function stlValidate(mnv){
-  const el = document.getElementById(`stl-sao-${mnv}`);
+function _renderStlSummaryCards(st, luyKeMap){
+  const el = document.getElementById('stl-luykе-cards');
   if(!el) return;
-  const v = parseFloat(el.value);
-  if(v < 0){ el.value = 0; showToast('⚠️ Sao tích lũy không được âm!'); }
+  const nvs = CONFIG[st]?.nv||[];
+  if(!nvs.length){ el.innerHTML = '<span style="color:var(--t3);font-size:12px">Chưa có nhân viên</span>'; return; }
+  let html = '';
+  nvs.forEach(nv=>{
+    const rec = luyKeMap?.[nv.mnv] || {};
+    const luyKe = rec.luyKe != null ? rec.luyKe : '?';
+    const saoBC = rec.saoBC != null ? rec.saoBC : null;
+    const color = typeof luyKe==='number' && luyKe>0 ? 'var(--g)' : 'var(--t2)';
+    html+=`<div style="background:var(--bg3);border:1.5px solid ${color};border-radius:10px;padding:10px 14px;min-width:130px;flex:1 1 130px;max-width:190px">
+      <div style="font-size:11px;color:var(--t3);font-weight:600">${nv.ten}</div>
+      <div style="font-size:24px;font-weight:800;color:${color};margin:4px 0 2px">${luyKe} ⭐</div>
+      ${saoBC!=null?`<div style="font-size:10px;color:var(--t3)">${saoBC>=0?'+':''}${saoBC}⭐ tháng này</div>`:''}
+    </div>`;
+  });
+  el.innerHTML = html;
 }
 
-async function saveSaoTichLuyToSheets(){
-  if(currentRole !== 'ql'){ showToast('⚠️ Chỉ QL mới dùng được!'); return; }
-  const st = document.getElementById('stl-st')?.value||'TGDĐ';
+// Modal điều chỉnh lũy kế
+let _lkEditTarget = null;
+function openLkEdit(mnv, ten, currentLk, st){
+  _lkEditTarget = { mnv, ten, currentLk, st };
+  document.getElementById('lk-edit-sub').textContent = `${ten} (${mnv}) — Lũy kế hiện tại: ${currentLk}⭐`;
+  document.getElementById('lk-edit-val').value = currentLk;
+  document.getElementById('lk-edit-note').value = '';
+  document.getElementById('lk-edit-overlay').style.display = 'flex';
+  setTimeout(()=>document.getElementById('lk-edit-val').focus(), 100);
+}
+function closeLkEdit(e){
+  if(!e || e.target === document.getElementById('lk-edit-overlay')){
+    document.getElementById('lk-edit-overlay').style.display = 'none';
+  }
+}
+async function confirmLkEdit(){
+  if(!_lkEditTarget) return;
+  const { mnv, ten, currentLk, st } = _lkEditTarget;
+  const newVal = parseFloat(document.getElementById('lk-edit-val').value);
+  const note   = document.getElementById('lk-edit-note').value.trim();
+  if(isNaN(newVal) || newVal < 0){ showToast('⚠️ Giá trị không hợp lệ!'); return; }
+  if(!note){ showToast('⚠️ Bắt buộc nhập lý do điều chỉnh!'); document.getElementById('lk-edit-note').focus(); return; }
+  const now = new Date().toLocaleString('vi-VN');
   const stlData = getStlData();
   if(!stlData[st]) stlData[st]={};
-  const nvs = CONFIG[st]?.nv||[];
-  const now = new Date().toLocaleString('vi-VN');
-  const auditLog = getStlAudit();
-  let changed = 0;
-  nvs.forEach(nv=>{
-    const el = document.getElementById(`stl-sao-${nv.mnv}`);
-    if(!el) return;
-    const newSao = Math.max(0, parseFloat(el.value)||0);
-    const oldSao = stlData[st]?.[nv.mnv]?.sao || 0;
-    if(newSao !== oldSao){
-      auditLog.unshift({
-        ts: Date.now(),
-        st, mnv:nv.mnv, ten:nv.ten,
-        oldSao, newSao,
-        updatedBy: 'Quản lý',
-        updatedAt: now
-      });
-      changed++;
-    }
-    stlData[st][nv.mnv] = { sao: newSao, updatedAt: now, updatedBy: 'Quản lý' };
-  });
-  // Giữ tối đa 200 audit records
-  while(auditLog.length > 200) auditLog.pop();
+  stlData[st][mnv] = { sao: newVal, updatedAt: now, updatedBy: currentUser?.name||'Quản lý', isOverride: true, note };
   LS.set(STL_KEY, stlData);
+  const auditLog = getStlAudit();
+  auditLog.unshift({ ts: Date.now(), st, mnv, ten, oldSao: currentLk, newSao: newVal, updatedBy: currentUser?.name||'Quản lý', updatedAt: now, note });
+  while(auditLog.length > 200) auditLog.pop();
   LS.set(STL_AUDIT_KEY, auditLog);
-
-  // Đẩy lên Sheets — gửi từng NV để Sheets lưu tập trung
   if(API_URL){
     try{
-      // Gửi toàn bộ data của ST này
-      await callAPIPost('saveSaoTichLuy', { st, data: stlData[st] });
-      showToast(`✅ Đồng bộ Sheets xong! ${changed} NV thay đổi — Tất cả thiết bị nhận ngay`);
-    }catch(e){
-      showToast(`✅ Lưu local OK (${changed} thay đổi). Sheets lỗi: ${e.message}`);
-    }
+      await callAPIPost('saveSaoTichLuy', { st, data: { [mnv]: { sao: newVal, updatedAt: now, updatedBy: currentUser?.name||'Quản lý' } } });
+      showToast(`✅ Đã cập nhật lũy kế ${ten}: ${newVal}⭐ — đồng bộ Sheets xong`);
+    }catch(e){ showToast(`✅ Đã lưu local. Sheets lỗi: ${e.message}`); }
   } else {
-    showToast(`✅ Đã lưu local! ${changed} thay đổi — Cần kết nối Sheets để đồng bộ`);
+    showToast(`✅ Đã lưu local lũy kế ${ten}: ${newVal}⭐`);
   }
+  document.getElementById('lk-edit-overlay').style.display = 'none';
   renderSaoTichLuy();
-  // Refresh sao-hien-tai nếu đang xem báo cáo
-  const selSt = document.getElementById('sel-st')?.value;
-  const selMnv = document.getElementById('sel-nv')?.value;
-  const selNgay = document.getElementById('sel-ngay')?.value;
+  const selSt=document.getElementById('sel-st')?.value;
+  const selMnv=document.getElementById('sel-nv')?.value;
+  const selNgay=document.getElementById('sel-ngay')?.value;
   if(selSt&&selMnv&&selNgay) loadSaoDangCo(selSt,selMnv,selNgay);
 }
 
-function getSaoTichLuyNV(st, mnv){
-  // Trả về sao tích lũy đầu tháng do QL set
-  const data = getStlData();
-  return data?.[st]?.[mnv]?.sao || 0;
-}
-
+function stlValidate(mnv){}
+async function saveSaoTichLuyToSheets(){ showToast('💡 Dùng nút ✏️ Điều chỉnh trên từng nhân viên để cập nhật lũy kế.'); }
 function showStlHistory(mnv, ten){
   const audit = getStlAudit();
   const history = audit.filter(a=>a.mnv===mnv);
-  if(!history.length){ showToast(`Chưa có lịch sử thay đổi cho ${ten}`); return; }
-  let msg = `Lịch sử sao TL — ${ten}:\n`;
-  history.slice(0,10).forEach(a=>{
-    msg += `${a.updatedAt}: ${a.oldSao}⭐ → ${a.newSao}⭐ (${a.updatedBy})\n`;
-  });
+  if(!history.length){ showToast(`Chưa có lịch sử điều chỉnh cho ${ten}`); return; }
+  let msg = `Lịch sử lũy kế — ${ten}:\n`;
+  history.slice(0,10).forEach(a=>{ msg += `${a.updatedAt}: ${a.oldSao}⭐ → ${a.newSao}⭐\n  Lý do: ${a.note||'—'}\n`; });
   alert(msg);
 }
-
 function renderStlAudit(){
   const log = document.getElementById('stl-audit-log');
   if(!log) return;
   const audit = getStlAudit();
-  if(!audit.length){ log.innerHTML=`<p style="color:var(--t3);font-size:12px;padding:10px">Chưa có lịch sử thay đổi.</p>`; return; }
+  if(!audit.length){ log.innerHTML=`<p style="color:var(--t3);font-size:12px;padding:10px">Chưa có lịch sử điều chỉnh.</p>`; return; }
   let html = '';
   audit.slice(0,50).forEach(a=>{
     const diff = a.newSao - a.oldSao;
-    html+=`<div style="padding:8px 12px;border-bottom:1px solid var(--bd);display:flex;align-items:center;gap:10px;font-size:12px">
-      <div style="flex:1">
-        <b>${a.ten}</b> <span class="chip-${a.st==='TGDĐ'?'tgdd':'tz'}" style="font-size:10px">${a.st}</span>
-        — ${a.oldSao}⭐ → <b>${a.newSao}⭐</b>
+    html+=`<div style="padding:8px 12px;border-bottom:1px solid var(--bd);font-size:12px">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <b>${a.ten||a.mnv}</b>
+        <span style="font-size:10px;background:var(--bg3);padding:2px 7px;border-radius:20px">${a.st}</span>
+        <span>${a.oldSao}⭐ → <b>${a.newSao}⭐</b></span>
         <span style="color:${diff>=0?'var(--g)':'var(--r)'};font-weight:700">${diff>=0?'+':''}${diff}</span>
+        <span style="color:var(--t3);font-size:11px;margin-left:auto">${a.updatedAt}</span>
       </div>
-      <div style="font-size:10px;color:var(--t3)">${a.updatedAt} · ${a.updatedBy}</div>
+      ${a.note?`<div style="color:var(--t2);margin-top:3px;font-size:11px">📝 ${a.note}</div>`:''}
     </div>`;
   });
   log.innerHTML = html;
 }
+async function autoSyncSaoTichLuy(){
+  if(!API_URL) return;
+  const st  = document.getElementById('sel-st')?.value;
+  const mnv = document.getElementById('sel-nv')?.value;
+  if(!st || !mnv) return;
+  try{
+    const lk = await callAPIPost('getSaoLuyKe', { st, mnv });
+    if(lk && lk.ok && typeof lk.luyKe === 'number'){
+      const lkEl = document.getElementById('sao-luy-ke');
+      const bcEl = document.getElementById('sao-luy-ke-bc');
+      if(lkEl) lkEl.textContent = lk.luyKe;
+      if(bcEl){ bcEl.textContent = lk.luyKe; onInputChange(); }
+    }
+  }catch(e){}
+}
+async function manualRefreshSao(){
+  const btn = document.getElementById('sao-refresh-btn');
+  if(btn){ btn.style.transform='rotate(360deg)'; btn.style.transition='transform .6s'; setTimeout(()=>{ btn.style.transform=''; btn.style.transition='transform .3s'; },700); }
+  const st  = document.getElementById('sel-st')?.value;
+  const mnv = document.getElementById('sel-nv')?.value;
+  if(!st||!mnv){ showToast('⚠️ Chọn nhân viên trước'); return; }
+  if(!API_URL){ showToast('⚠️ Chưa kết nối Sheets'); return; }
+  try{
+    const lk = await callAPIPost('getSaoLuyKe', { st, mnv });
+    if(lk && lk.ok){
+      const lkEl = document.getElementById('sao-luy-ke');
+      const bcEl = document.getElementById('sao-luy-ke-bc');
+      if(lkEl) lkEl.textContent = lk.luyKe;
+      if(bcEl){ bcEl.textContent = lk.luyKe; onInputChange(); }
+      showToast(`✅ Sao lũy kế: ${lk.luyKe}⭐`);
+    } else { showToast('⚠️ Không lấy được sao'); }
+  }catch(e){ showToast('❌ Lỗi: '+e.message); }
+}
+async function fetchSaoTichLuyFromSheets(st, mnv, ngayHienTai){
+  if(!API_URL) return;
+  try{
+    const lk = await callAPIPost('getSaoLuyKe', { st, mnv });
+    if(lk && lk.ok && typeof lk.luyKe === 'number'){
+      const lkEl = document.getElementById('sao-luy-ke');
+      if(lkEl) lkEl.textContent = lk.luyKe;
+      const bcEl = document.getElementById('sao-luy-ke-bc');
+      if(bcEl){ bcEl.textContent = lk.luyKe; onInputChange(); }
+    }
+  }catch(e){}
+}
+async function fetchAllSaoTichLuyFromSheets(){}
+function _refreshStlRowCalc(){}
 
 /* ═══════════════════════════════
    QL TARGET MANAGER
@@ -4963,43 +5063,58 @@ function renderQlTarget(){
   </div>`;
 
   nhs.forEach((item, idx) => {
-    html += `
-    <div style="display:grid;grid-template-columns:1fr 90px 60px 60px 60px 60px 36px;gap:4px;align-items:center;padding:8px 10px;background:var(--bg2);border:1px solid var(--bd);border-radius:var(--rad-sm);margin-bottom:4px;transition:border-color .15s" onmouseover="this.style.borderColor='var(--bd2)'" onmouseout="this.style.borderColor='var(--bd)'">
-      <div>
-        <input type="text" value="${item.nh}" id="qt-nh-${idx}"
-          style="width:100%;font-size:12px;font-weight:700;border:1.5px solid var(--bd2);border-radius:6px;padding:6px 8px;font-family:inherit;background:var(--bg3);color:var(--t1)"
-          oninput="qtSync(${idx},'nh',this.value)" placeholder="Tên môn"/>
-      </div>
-      <div style="text-align:center">
-        <input type="number" value="${item.ct}" id="qt-ct-${idx}" step="any" min="0"
-          style="width:100%;font-size:13px;font-weight:800;border:1.5px solid var(--bd2);border-radius:6px;padding:6px 4px;font-family:inherit;text-align:center;background:var(--bg3);color:var(--p)"
-          oninput="qtSync(${idx},'ct',parseFloat(this.value)||0)"/>
-      </div>
-      <div style="text-align:center">
-        <input type="number" value="${item.tru}" id="qt-tru-${idx}" step="1" min="0"
-          style="width:100%;font-size:13px;font-weight:800;border:1.5px solid var(--bd2);border-radius:6px;padding:6px 4px;font-family:inherit;text-align:center;background:var(--bg3);color:var(--r)"
-          oninput="qtSync(${idx},'tru',parseInt(this.value)||0)"/>
-      </div>
-      <div style="text-align:center">
-        <input type="number" value="${item.pct5||100}" id="qt-p5-${idx}" step="1" min="0"
-          style="width:100%;font-size:12px;font-weight:700;border:1.5px solid var(--bd2);border-radius:6px;padding:6px 4px;font-family:inherit;text-align:center;background:var(--bg3);color:var(--ora,var(--a))"
-          oninput="qtSync(${idx},'pct5',parseInt(this.value)||100)"/>
-      </div>
-      <div style="text-align:center">
-        <input type="number" value="${item.pct10||120}" id="qt-p10-${idx}" step="1" min="0"
-          style="width:100%;font-size:12px;font-weight:700;border:1.5px solid var(--bd2);border-radius:6px;padding:6px 4px;font-family:inherit;text-align:center;background:var(--bg3);color:var(--g)"
-          oninput="qtSync(${idx},'pct10',parseInt(this.value)||120)"/>
-      </div>
-      <div style="text-align:center">
-        <input type="number" value="${item.pct20||200}" id="qt-p20-${idx}" step="1" min="0"
-          style="width:100%;font-size:12px;font-weight:700;border:1.5px solid var(--bd2);border-radius:6px;padding:6px 4px;font-family:inherit;text-align:center;background:var(--bg3);color:var(--b)"
-          oninput="qtSync(${idx},'pct20',parseInt(this.value)||200)"/>
-      </div>
-      <div style="text-align:center">
-        <button onclick="qtDeleteMon(${idx})"
-          style="background:var(--r2);color:var(--r);border:1px solid rgba(255,77,109,.2);border-radius:6px;width:28px;height:28px;cursor:pointer;font-size:14px;font-weight:800;display:flex;align-items:center;justify-content:center;font-family:inherit">✕</button>
-      </div>
-    </div>`;
+    if(item.is_thuong_them){
+      html += `
+      <div style="display:grid;grid-template-columns:1fr auto 36px;gap:8px;align-items:center;padding:10px 14px;background:color-mix(in srgb,var(--g) 9%,var(--bg2));border:1.5px solid var(--g);border-radius:var(--rad-sm);margin-bottom:4px">
+        <div>
+          <div style="font-size:12px;font-weight:800;color:var(--g)">🎁 Thưởng Thêm</div>
+          <div style="font-size:10px;color:var(--t3);margin-top:2px">Không trừ sao · NV nhập số sao tùy ý · Bắt buộc ghi rõ lý do</div>
+        </div>
+        <div style="font-size:11px;color:var(--g);font-weight:700;padding:4px 10px;background:var(--g2);border-radius:20px">✅ Đang bật</div>
+        <div style="text-align:center">
+          <button onclick="qtDeleteMon(${idx})"
+            style="background:var(--r2);color:var(--r);border:1px solid rgba(255,77,109,.2);border-radius:6px;width:28px;height:28px;cursor:pointer;font-size:14px;font-weight:800;display:flex;align-items:center;justify-content:center;font-family:inherit">✕</button>
+        </div>
+      </div>`;
+    } else {
+      html += `
+      <div style="display:grid;grid-template-columns:1fr 90px 60px 60px 60px 60px 36px;gap:4px;align-items:center;padding:8px 10px;background:var(--bg2);border:1px solid var(--bd);border-radius:var(--rad-sm);margin-bottom:4px;transition:border-color .15s" onmouseover="this.style.borderColor='var(--bd2)'" onmouseout="this.style.borderColor='var(--bd)'">
+        <div>
+          <input type="text" value="${item.nh}" id="qt-nh-${idx}"
+            style="width:100%;font-size:12px;font-weight:700;border:1.5px solid var(--bd2);border-radius:6px;padding:6px 8px;font-family:inherit;background:var(--bg3);color:var(--t1)"
+            oninput="qtSync(${idx},'nh',this.value)" placeholder="Tên môn"/>
+        </div>
+        <div style="text-align:center">
+          <input type="number" value="${item.ct}" id="qt-ct-${idx}" step="any" min="0"
+            style="width:100%;font-size:13px;font-weight:800;border:1.5px solid var(--bd2);border-radius:6px;padding:6px 4px;font-family:inherit;text-align:center;background:var(--bg3);color:var(--p)"
+            oninput="qtSync(${idx},'ct',parseFloat(this.value)||0)"/>
+        </div>
+        <div style="text-align:center">
+          <input type="number" value="${item.tru}" id="qt-tru-${idx}" step="1" min="0"
+            style="width:100%;font-size:13px;font-weight:800;border:1.5px solid var(--bd2);border-radius:6px;padding:6px 4px;font-family:inherit;text-align:center;background:var(--bg3);color:var(--r)"
+            oninput="qtSync(${idx},'tru',parseInt(this.value)||0)"/>
+        </div>
+        <div style="text-align:center">
+          <input type="number" value="${item.pct5||100}" id="qt-p5-${idx}" step="1" min="0"
+            style="width:100%;font-size:12px;font-weight:700;border:1.5px solid var(--bd2);border-radius:6px;padding:6px 4px;font-family:inherit;text-align:center;background:var(--bg3);color:var(--ora,var(--a))"
+            oninput="qtSync(${idx},'pct5',parseInt(this.value)||100)"/>
+        </div>
+        <div style="text-align:center">
+          <input type="number" value="${item.pct10||120}" id="qt-p10-${idx}" step="1" min="0"
+            style="width:100%;font-size:12px;font-weight:700;border:1.5px solid var(--bd2);border-radius:6px;padding:6px 4px;font-family:inherit;text-align:center;background:var(--bg3);color:var(--g)"
+            oninput="qtSync(${idx},'pct10',parseInt(this.value)||120)"/>
+        </div>
+        <div style="text-align:center">
+          <input type="number" value="${item.pct20||200}" id="qt-p20-${idx}" step="1" min="0"
+            style="width:100%;font-size:12px;font-weight:700;border:1.5px solid var(--bd2);border-radius:6px;padding:6px 4px;font-family:inherit;text-align:center;background:var(--bg3);color:var(--b)"
+            oninput="qtSync(${idx},'pct20',parseInt(this.value)||200)"/>
+        </div>
+        <div style="text-align:center">
+          <button onclick="qtDeleteMon(${idx})"
+            style="background:var(--r2);color:var(--r);border:1px solid rgba(255,77,109,.2);border-radius:6px;width:28px;height:28px;cursor:pointer;font-size:14px;font-weight:800;display:flex;align-items:center;justify-content:center;font-family:inherit">✕</button>
+        </div>
+      </div>`;
+    }
   });
 
   body.innerHTML = html;
@@ -5025,6 +5140,24 @@ function qtAddMon(){
   });
   renderQlTarget();
   showToast('✅ Đã thêm môn: ' + name.trim());
+}
+
+function qtAddThuongThem(){
+  const st = document.getElementById('qt-st')?.value || 'TGDĐ';
+  if(!CONFIG[st]) return;
+  if(CONFIG[st].nh.some(n=>n.is_thuong_them)){
+    showToast('⚠️ Đã có Thưởng Thêm cho ' + st + ' rồi!');
+    return;
+  }
+  CONFIG[st].nh.push({
+    nh: '🎁 Thưởng Thêm',
+    ct: 0, tru: 0, sao_kd: 0,
+    pct5: 9999, pct10: 9999, pct20: 9999,
+    is_thuong_them: true
+  });
+  renderQlTarget();
+  saveState();
+  showToast('✅ Đã thêm Thưởng Thêm cho ' + st + '! Nhấn Lưu để đồng bộ NV.');
 }
 
 function qtDeleteMon(idx){
