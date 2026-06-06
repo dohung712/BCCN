@@ -2591,7 +2591,7 @@ async function syncConfigAndLoad(){
     await pullConfigFromNewSheet(st);
     _configSynced = true;
     activeChips.clear(); // reset chip để buildChipBar lấy đúng môn mới
-    showToast('✅ Đồng bộ xong! Môn thi đua đã cập nhật.', 2500);
+    showToast('✅ Đồng bộ xong! Môn thi đua + Tỉ lệ NV đã cập nhật.', 2500);
     setSyncStatus('ok','✅ Đã đồng bộ môn thi đua — '+new Date().toLocaleTimeString('vi-VN'));
   }catch(e){
     // Nếu không kết nối được Sheets → dùng config local, vẫn cho vào
@@ -2628,35 +2628,71 @@ async function pullConfigFromNewSheet(filterSt){
       // Hàm chuẩn hóa: bỏ dấu + lowercase để match không phân biệt dấu/hoa thường
       const norm = s => s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
 
-      // Tìm hàng header theo tên cột (không dùng index cứng — gviz có thể bỏ cột trống)
-      let headerRowIdx = -1;
+      // ── PASS 1: Quét toàn bộ rows, phân loại header NV và header Ngành hàng ──
+      let nvHeaderRowIdx = -1, headerRowIdx = -1;
+      let iNvMNV=-1, iNvTen=-1, iNvRatio=-1;
       let iNH=-1, iCT=-1, iTru=-1, iSTT=-1, iSaoKD=-1;
 
       for(let i=0;i<rows.length;i++){
         const r = rows[i];
         const cells = (r.c||[]).map(c=>String(c?.v??c?.f??'').trim());
         const normed = cells.map(norm);
-        const hasNh = normed.some(c=>/nganh|mon/.test(c));
-        const hasCt = normed.some(c=>/chi tieu|target/.test(c));
-        if(hasNh && hasCt){
+
+        // Header vùng NHÂN VIÊN: có "mnv" và ("ten" hoặc "nhan vien")
+        if(nvHeaderRowIdx < 0 && normed.some(c=>/^mnv$/.test(c)) && normed.some(c=>/ten|nhan vien/.test(c))){
+          nvHeaderRowIdx = i;
+          iNvMNV   = normed.findIndex(c=>/^mnv$/.test(c));
+          iNvTen   = normed.findIndex(c=>/ten nhan vien|ten/.test(c));
+          iNvRatio = normed.findIndex(c=>/ti le|ratio/.test(c));
+          console.log(`[pullConfig][${tab.st}] NV Header row ${i}:`, cells);
+          console.log(`[pullConfig][${tab.st}] NV Col idx → MNV:${iNvMNV} Ten:${iNvTen} Ratio:${iNvRatio}`);
+          continue;
+        }
+
+        // Header vùng NGÀNH HÀNG: có "nganh/mon" và "chi tieu/target"
+        if(headerRowIdx < 0 && normed.some(c=>/nganh|mon/.test(c)) && normed.some(c=>/chi tieu|target/.test(c))){
           headerRowIdx = i;
-          // Tìm index từng cột theo tên chuẩn hóa
           iSTT   = normed.findIndex(c=>/^stt$/.test(c));
           iNH    = normed.findIndex(c=>/nganh|mon/.test(c));
           iCT    = normed.findIndex(c=>/chi tieu|target/.test(c));
           iTru   = normed.findIndex(c=>/tru sao|tru/.test(c));
           iSaoKD = normed.findIndex(c=>/sao kd|saokd/.test(c));
-          console.log(`[pullConfig][${tab.st}] Header row ${i}:`, cells);
-          console.log(`[pullConfig][${tab.st}] Col idx → STT:${iSTT} NH:${iNH} CT:${iCT} Tru:${iTru} SaoKD:${iSaoKD}`);
-          break;
+          console.log(`[pullConfig][${tab.st}] NH Header row ${i}:`, cells);
+          console.log(`[pullConfig][${tab.st}] NH Col idx → STT:${iSTT} NH:${iNH} CT:${iCT} Tru:${iTru} SaoKD:${iSaoKD}`);
+          // Dừng sau khi tìm thấy cả 2 header
+          if(nvHeaderRowIdx >= 0) break;
         }
       }
 
+      // ── PASS 2: Pull dữ liệu NV (ratio) — rows nằm giữa nvHeaderRowIdx và headerRowIdx ──
+      if(nvHeaderRowIdx >= 0 && iNvMNV >= 0){
+        const nvEnd = headerRowIdx >= 0 ? headerRowIdx : nvHeaderRowIdx + 10;
+        let updatedCount = 0;
+        for(let i = nvHeaderRowIdx + 1; i < nvEnd; i++){
+          const r = rows[i];
+          if(!r) continue;
+          const getV = idx => idx>=0 ? (r.c?.[idx]?.v ?? r.c?.[idx]?.f ?? null) : null;
+          const mnv   = String(getV(iNvMNV) ?? '').trim();
+          const ten   = iNvTen >= 0 ? String(getV(iNvTen) ?? '').trim() : '';
+          const ratio = iNvRatio >= 0 ? parseFloat(getV(iNvRatio)) || 0 : 0;
+          if(!mnv) continue;
+          // Cập nhật vào CONFIG nếu NV đã tồn tại; không thêm NV mới từ sheet (quản lý qua UI)
+          const existing = CONFIG[tab.st].nv.find(n=>n.mnv===mnv);
+          if(existing){
+            existing.ratio = ratio;
+            if(ten) existing.ten = ten;
+            updatedCount++;
+          }
+        }
+        console.log(`✅ Cập nhật ratio cho ${updatedCount} NV từ tab ${tab.st}`);
+      }
+
       if(headerRowIdx < 0){
-        console.warn('Không tìm thấy header trong tab ' + tab.st);
+        console.warn('Không tìm thấy header Ngành hàng trong tab ' + tab.st);
         continue;
       }
 
+      // ── PASS 3: Pull danh sách Ngành hàng + Chỉ tiêu ──
       const startRow = headerRowIdx + 1;
       const nhList = [];
 
