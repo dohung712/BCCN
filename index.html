@@ -2186,6 +2186,8 @@ function loadState(){
     if(saved.api_url) API_URL = saved.api_url;
     // nếu chưa lưu url thì dùng default
   }
+  // Bake target cố định cho NV (kể cả config local cũ chưa có targets)
+  ['TGDĐ','Topzone'].forEach(s => bakeCtNvTargets(s));
 }
 function saveState(){
   LS.set(STORAGE_KEY, { config: CONFIG, api_url: API_URL });
@@ -2358,6 +2360,8 @@ async function pullFromSheets(){
     const r = await callAPIPublic('getConfig', {});
     if(r && r.config){
       CONFIG = r.config;
+      // Bake target cố định cho từng NV
+      ['TGDĐ','Topzone'].forEach(s => bakeCtNvTargets(s));
       saveState(); activeChips.clear();
       LS.set(CONFIG_PULL_KEY, Date.now());
       setSyncStatus('ok','✅ Đã cập nhật từ Sheets');
@@ -2389,10 +2393,37 @@ function getCtNgay(st, item){
 
 function getCtNv(st, mnv, item){
   const nv = CONFIG[st].nv.find(n=>n.mnv===mnv);
+  // Ưu tiên target cố định đã baked sẵn khi QL lưu
+  if(nv && nv.targets && typeof nv.targets[item.nh] === 'number'){
+    return nv.targets[item.nh];
+  }
+  // Fallback: chia động (dùng khi chưa có baked targets)
   const ctNgay = getCtNgay(st, item);
   if(!nv) return ctNgay / (CONFIG[st].nv.length||1);
   if(nv.ratio>0) return +(ctNgay * nv.ratio / 100).toFixed(3);
   return +(ctNgay / (CONFIG[st].nv.length||1)).toFixed(3);
+}
+
+// Tính và lưu cứng target ngày cho từng NV×môn vào CONFIG
+// Gọi trước mỗi lần saveConfig để NV luôn đọc được target đúng
+function bakeCtNvTargets(st){
+  const nvs = CONFIG[st]?.nv;
+  const nhs = CONFIG[st]?.nh;
+  if(!nvs || !nhs) return;
+  const nvCount = nvs.length || 1;
+  nvs.forEach(nv => {
+    nv.targets = {};
+    nhs.forEach(item => {
+      const ctNgay = item.ct / 30;
+      let ct_nv;
+      if(nv.ratio > 0){
+        ct_nv = +(ctNgay * nv.ratio / 100).toFixed(3);
+      } else {
+        ct_nv = +(ctNgay / nvCount).toFixed(3);
+      }
+      nv.targets[item.nh] = ct_nv;
+    });
+  });
 }
 
 function getDaysInfoHtml(st, ngay){
@@ -2629,6 +2660,9 @@ async function syncConfigAndLoad(){
   try{
     // Pull config từ Google Sheets (môn thi đua + chỉ tiêu + danh sách NV)
     await pullConfigFromNewSheet(st);
+    // Bake target cố định cho NV sau khi đọc từ Trang tính
+    ['TGDĐ','Topzone'].forEach(s => bakeCtNvTargets(s));
+    saveState();
     _configSynced = true;
     activeChips.clear(); // reset chip để buildChipBar lấy đúng môn mới
     // Rebuild dropdown NV để phản ánh danh sách mới từ Trang tính
@@ -3441,8 +3475,10 @@ function collectSheetNv(){
   });
 }
 async function saveSheetNvToSheets(){
-  collectSheetNv(); saveState();
+  collectSheetNv();
   const st = document.getElementById('sheet-nv-st').value;
+  bakeCtNvTargets(st); // tính cứng target NV trước khi lưu
+  saveState();
   const count = CONFIG[st].nv.length;
   showToast('⏳ Đang lưu danh sách nhân viên...');
   if(API_URL){
@@ -3567,6 +3603,7 @@ async function saveSheetStToSheets(){
   const wd=getWorkDays();
   CONFIG[st].workDays=wd;
   collectSheetSt();
+  bakeCtNvTargets(st); // tính cứng target NV trước khi lưu
   saveState(); activeChips.clear();
   const count = CONFIG[st].nh.length;
   // Tự động đồng bộ với Thưởng/Trừ sao (cùng dùng CONFIG[st].nh)
@@ -4715,6 +4752,8 @@ async function saveThuongTruToSheets(){
     if(p20) n.pct20=parseInt(p20.value)||200;
     if(tru) n.tru=parseInt(tru.value)||50;
   });
+  // Bake target cố định cho NV
+  ['TGDĐ','Topzone'].forEach(s => bakeCtNvTargets(s));
   saveState();
   if(API_URL){
     try{ await callAPIPost('saveConfig',{config:CONFIG}); showToast('✅ Đã lưu & đồng bộ lên Sheets!'); }
@@ -5324,6 +5363,8 @@ async function qtSaveToSheets(){
     item.pct5 = p5; item.pct10 = p10; item.pct20 = p20;
   });
 
+  // Bake target cố định cho từng NV trước khi đẩy lên
+  ['TGDĐ','Topzone'].forEach(s => bakeCtNvTargets(s));
   saveState(); // lưu local
   activeChips.clear();
 
@@ -5361,6 +5402,8 @@ async function autoSyncConfigForNv(forceRefresh=false){
     const r = await callAPIPublic('getConfig', {});
     if(r && r.config){
       CONFIG = r.config;
+      // Bake target cố định cho NV
+      ['TGDĐ','Topzone'].forEach(s => bakeCtNvTargets(s));
       saveState();
       activeChips.clear();
       LS.set(CONFIG_PULL_KEY, Date.now());
