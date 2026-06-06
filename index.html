@@ -2596,37 +2596,41 @@ async function pullConfigFromNewSheet(filterSt){
       const json = JSON.parse(text.match(/google\.visualization\.Query\.setResponse\(([\s\S]*)\)/)[1]);
       const rows = json.table.rows;
 
-      // Tìm hàng header chứa "Ngành hàng" hoặc "STT"
-      // (sheet có vài hàng NHÂN VIÊN phía trên)
+      // Tìm hàng header theo tên cột (không dùng index cứng — gviz có thể bỏ cột trống)
       let headerRowIdx = -1;
-      // Cột B (index 1) = STT/Ngành, Cột C = Chỉ tiêu, Cột D = Trừ sao, Cột E = Sao KD
-      // Tìm hàng có cell B = "STT" hoặc "Ngành hàng"
+      let iNH=-1, iCT=-1, iTru=-1, iSTT=-1;
+
       for(let i=0;i<rows.length;i++){
         const r = rows[i];
-        const b = r.c?.[1]?.v ?? r.c?.[1]?.f ?? '';
-        if(typeof b === 'string' && /STT|ngành/i.test(b)){
+        const cells = (r.c||[]).map(c=>String(c?.v??c?.f??'').trim());
+        const hasNh = cells.some(c=>/ngành|môn/i.test(c));
+        const hasCt = cells.some(c=>/chỉ tiêu|target/i.test(c));
+        if(hasNh && hasCt){
           headerRowIdx = i;
+          // Cột A=STT, B=Ngành hàng, C=Chỉ tiêu, D=Trừ sao, E=Sao KD
+          iSTT = cells.findIndex(c=>/^STT$/i.test(c));          // A → index 0
+          iNH  = cells.findIndex(c=>/ngành|môn/i.test(c));      // B → index 1
+          iCT  = cells.findIndex(c=>/chỉ tiêu|target/i.test(c)); // C → index 2
+          iTru = cells.findIndex(c=>/trừ|tru/i.test(c));        // D → index 3
           break;
         }
       }
 
-      // Lấy dữ liệu từ hàng sau header
-      const startRow = headerRowIdx >= 0 ? headerRowIdx + 1 : 0;
+      if(headerRowIdx < 0){
+        console.warn('Không tìm thấy header trong tab ' + tab.st);
+        continue;
+      }
+
+      const startRow = headerRowIdx + 1;
       const nhList = [];
 
       for(let i = startRow; i < rows.length; i++){
         const r = rows[i];
-        const getV = idx => r.c?.[idx]?.v ?? r.c?.[idx]?.f ?? null;
-        // Cột A=index0: (trống hoặc số thứ tự)
-        // Cột B=index1: STT (số)
-        // Cột C=index2: Tên ngành hàng (text)  ← dùng cột này
-        // Cột D=index3: Chỉ tiêu cả ST
-        // Cột E=index4: Trừ sao
-        // Cột F=index5: Sao KD (thường = 0, bỏ qua)
-        const stt  = getV(1);
-        const name = getV(2);
-        const ct   = getV(3);
-        const tru  = getV(4);
+        const getV = idx => idx>=0 ? (r.c?.[idx]?.v ?? r.c?.[idx]?.f ?? null) : null;
+        const stt  = getV(iSTT);
+        const name = getV(iNH);
+        const ct   = getV(iCT);
+        const tru  = getV(iTru);
         if(!name || typeof name !== 'string' || !name.trim()) continue;
         if(stt === null && ct === null) continue; // hàng trống
 
