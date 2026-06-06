@@ -2625,22 +2625,29 @@ async function pullConfigFromNewSheet(filterSt){
       const json = JSON.parse(text.match(/google\.visualization\.Query\.setResponse\(([\s\S]*)\)/)[1]);
       const rows = json.table.rows;
 
+      // Hàm chuẩn hóa: bỏ dấu + lowercase để match không phân biệt dấu/hoa thường
+      const norm = s => s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+
       // Tìm hàng header theo tên cột (không dùng index cứng — gviz có thể bỏ cột trống)
       let headerRowIdx = -1;
-      let iNH=-1, iCT=-1, iTru=-1, iSTT=-1;
+      let iNH=-1, iCT=-1, iTru=-1, iSTT=-1, iSaoKD=-1;
 
       for(let i=0;i<rows.length;i++){
         const r = rows[i];
         const cells = (r.c||[]).map(c=>String(c?.v??c?.f??'').trim());
-        const hasNh = cells.some(c=>/ngành|môn/i.test(c));
-        const hasCt = cells.some(c=>/chỉ tiêu|target/i.test(c));
+        const normed = cells.map(norm);
+        const hasNh = normed.some(c=>/nganh|mon/.test(c));
+        const hasCt = normed.some(c=>/chi tieu|target/.test(c));
         if(hasNh && hasCt){
           headerRowIdx = i;
-          // Cột A=STT, B=Ngành hàng, C=Chỉ tiêu, D=Trừ sao, E=Sao KD
-          iSTT = cells.findIndex(c=>/^STT$/i.test(c));          // A → index 0
-          iNH  = cells.findIndex(c=>/ngành|môn/i.test(c));      // B → index 1
-          iCT  = cells.findIndex(c=>/chỉ tiêu|target/i.test(c)); // C → index 2
-          iTru = cells.findIndex(c=>/trừ|tru/i.test(c));        // D → index 3
+          // Tìm index từng cột theo tên chuẩn hóa
+          iSTT   = normed.findIndex(c=>/^stt$/.test(c));
+          iNH    = normed.findIndex(c=>/nganh|mon/.test(c));
+          iCT    = normed.findIndex(c=>/chi tieu|target/.test(c));
+          iTru   = normed.findIndex(c=>/tru sao|tru/.test(c));
+          iSaoKD = normed.findIndex(c=>/sao kd|saokd/.test(c));
+          console.log(`[pullConfig][${tab.st}] Header row ${i}:`, cells);
+          console.log(`[pullConfig][${tab.st}] Col idx → STT:${iSTT} NH:${iNH} CT:${iCT} Tru:${iTru} SaoKD:${iSaoKD}`);
           break;
         }
       }
@@ -2656,10 +2663,11 @@ async function pullConfigFromNewSheet(filterSt){
       for(let i = startRow; i < rows.length; i++){
         const r = rows[i];
         const getV = idx => idx>=0 ? (r.c?.[idx]?.v ?? r.c?.[idx]?.f ?? null) : null;
-        const stt  = getV(iSTT);
-        const name = getV(iNH);
-        const ct   = getV(iCT);
-        const tru  = getV(iTru);
+        const stt    = getV(iSTT);
+        const name   = getV(iNH);
+        const ct     = getV(iCT);
+        const tru    = getV(iTru);
+        const sao_kd = getV(iSaoKD);
         if(!name || typeof name !== 'string' || !name.trim()) continue;
         if(stt === null && ct === null) continue; // hàng trống
 
@@ -2667,9 +2675,9 @@ async function pullConfigFromNewSheet(filterSt){
         const existing = (CONFIG[tab.st]?.nh || []).find(x=>x.nh===name.trim());
         nhList.push({
           nh    : name.trim(),
-          ct    : parseFloat(ct) || 0,
-          tru   : parseInt(tru)  || 50,
-          sao_kd: 0,
+          ct    : parseFloat(ct)    || 0,
+          tru   : parseInt(tru)     || 50,
+          sao_kd: parseFloat(sao_kd)|| 0,
           pct5  : existing?.pct5  ?? 100,
           pct10 : existing?.pct10 ?? 120,
           pct20 : existing?.pct20 ?? 200,
