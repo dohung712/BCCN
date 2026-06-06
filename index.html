@@ -1837,8 +1837,10 @@ function enterApp(role){
   rebuildNav();
   // Tự động chọn siêu thị + nhân viên nếu là NV
   if(role==='nv' && currentNvLogin){
-    autoFillNvSelectors(currentNvLogin);
-    setTimeout(autoSyncConfigForNv, 800);
+    // Pull config mới từ Sheets TRƯỚC khi render báo cáo
+    autoSyncConfigForNv(true).then(()=>{
+      autoFillNvSelectors(currentNvLogin);
+    });
   }
   // pw QL đã được lưu hash ngay trong doLogin() trước khi input bị clear
 }
@@ -2353,10 +2355,11 @@ async function pullFromSheets(){
   if(!API_URL){ showToast('⚠️ Chưa cấu hình API URL'); return; }
   setSyncStatus('loading','Đang kéo...');
   try{
-    const r = await callAPIPost('getConfig', {});
+    const r = await callAPIPublic('getConfig', {});
     if(r && r.config){
       CONFIG = r.config;
       saveState(); activeChips.clear();
+      LS.set(CONFIG_PULL_KEY, Date.now());
       setSyncStatus('ok','✅ Đã cập nhật từ Sheets');
       showToast('✅ Đã cập nhật target từ Google Sheets!');
     } else {
@@ -5332,25 +5335,25 @@ async function qtSaveToSheets(){
 const CONFIG_PULL_KEY = 'config_last_pull';
 const CONFIG_PULL_INTERVAL = 5 * 60 * 1000; // 5 phút pull 1 lần
 
-async function autoSyncConfigForNv(){
-  // Chỉ NV mới cần pull; QL tự quản lý
-  if(currentRole !== 'nv') return;
+async function autoSyncConfigForNv(forceRefresh=false){
   if(!API_URL) return;
   const lastPull = LS.get(CONFIG_PULL_KEY) || 0;
-  if(Date.now() - lastPull < CONFIG_PULL_INTERVAL) return;
+  const shouldPull = forceRefresh || (Date.now() - lastPull >= CONFIG_PULL_INTERVAL);
+  if(!shouldPull) return;
   try{
-    const r = await callAPIPost('getConfig', {});
+    // getConfig không cần auth — dùng callAPIPublic cho chắc
+    const r = await callAPIPublic('getConfig', {});
     if(r && r.config){
       CONFIG = r.config;
       saveState();
       activeChips.clear();
       LS.set(CONFIG_PULL_KEY, Date.now());
-      // Nếu NV đang xem báo cáo, refresh lại để áp target mới
+      // Nếu đang xem báo cáo → refresh để áp target mới
       const selSt  = document.getElementById('sel-st')?.value;
       const selMnv = document.getElementById('sel-nv')?.value;
       const selNgay= document.getElementById('sel-ngay')?.value;
-      if(selSt && selMnv && selNgay){
-        onSelNv(); // re-render báo cáo với config mới
+      if(selSt && selMnv && selNgay && !forceRefresh){
+        onSelNv();
         showToast('🔄 Target đã được cập nhật từ QL!', 3000);
       }
     }
