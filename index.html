@@ -1194,7 +1194,7 @@ body.role-ql .ql-only-flex{display:flex}
     <button class="btn btn-s" onclick="addNhCol()">+ Cột</button>
     <button class="btn btn-g" onclick="saveSheetStToSheets()">☁️ Lưu lên Sheets</button>
     <button class="btn btn-s" onclick="pullFromSheets()">⬇️ Kéo từ Sheets</button>
-    <a href="https://docs.google.com/spreadsheets/d/1sj-aDpw8w6aVI0BN-fPcAN1-PKP4FkQe1jC9tOoeSos/edit?gid=138751902#gid=138751902" target="_blank" class="btn btn-s" style="text-decoration:none;display:inline-flex;align-items:center;gap:5px">📄 Sheets</a>
+    <a id="sheet-st-link" href="https://docs.google.com/spreadsheets/d/1YL6npMl6AtfSYBP1SFjRwKT4QEC3dJrRE4ww5y-Ey3M/edit?gid=926424567#gid=926424567" target="_blank" class="btn btn-s" style="text-decoration:none;display:inline-flex;align-items:center;gap:5px">📄 Sheets</a>
   </div>
   <div class="sheet-wrap"><div id="sheet-st-body"></div></div>
   <div class="sheet-note">
@@ -1317,8 +1317,12 @@ body.role-ql .ql-only-flex{display:flex}
       <input type="url" id="cfg-api-url" placeholder="https://script.google.com/macros/s/AKfycbwjiKMWRuYdvRWClNVAhZR31b8A3zLnlzhZ0JcMFowgMjpDBQeHocgWSlxsyhm4IFQayg/exec"/>
     </div>
     <div class="form-row">
-      <label>📊 Link Google Sheets Target (Chỉ tiêu)</label>
-      <a href="https://docs.google.com/spreadsheets/d/1sj-aDpw8w6aVI0BN-fPcAN1-PKP4FkQe1jC9tOoeSos/edit?gid=138751902#gid=138751902" target="_blank" style="font-size:12px;font-weight:600;color:var(--p);padding:9px 12px;border:1px solid var(--p3);border-radius:var(--rad-sm);background:var(--p3);display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">📄 Mở Google Sheets Target →</a>
+      <label>📊 Link Google Sheets Target</label>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <a href="https://docs.google.com/spreadsheets/d/1YL6npMl6AtfSYBP1SFjRwKT4QEC3dJrRE4ww5y-Ey3M/edit?gid=926424567#gid=926424567" target="_blank" style="font-size:12px;font-weight:600;color:var(--p);padding:9px 12px;border:1px solid var(--p3);border-radius:var(--rad-sm);background:var(--p3);display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">📄 TGDĐ — Mở Google Sheets Target →</a>
+        <a href="https://docs.google.com/spreadsheets/d/1YL6npMl6AtfSYBP1SFjRwKT4QEC3dJrRE4ww5y-Ey3M/edit?gid=2000696213#gid=2000696213" target="_blank" style="font-size:12px;font-weight:600;color:var(--p);padding:9px 12px;border:1px solid var(--p3);border-radius:var(--rad-sm);background:var(--p3);display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">📄 Topzone — Mở Google Sheets Target →</a>
+        <a href="https://docs.google.com/spreadsheets/d/1YL6npMl6AtfSYBP1SFjRwKT4QEC3dJrRE4ww5y-Ey3M/edit?gid=1793741515#gid=1793741515" target="_blank" style="font-size:12px;font-weight:600;color:var(--g);padding:9px 12px;border:1px solid var(--g2);border-radius:var(--rad-sm);background:var(--g2);display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">🌟 Sao tích lũy — Mở Google Sheets →</a>
+      </div>
     </div>
     <div class="form-row">
       <label>Trạng thái kết nối</label>
@@ -1470,7 +1474,7 @@ body.role-ql .ql-only-flex{display:flex}
           <option value="Topzone">Topzone</option>
         </select>
         <button class="btn btn-g" onclick="saveSaoTichLuyToSheets()">☁️ Lưu & Đồng bộ</button>
-        <a href="https://docs.google.com/spreadsheets/d/1sj-aDpw8w6aVI0BN-fPcAN1-PKP4FkQe1jC9tOoeSos/edit?gid=138751902#gid=138751902" target="_blank" class="btn btn-s" style="text-decoration:none;display:inline-flex;align-items:center;gap:5px;font-size:12px;padding:8px 14px">📄 Sheets</a>
+        <a href="https://docs.google.com/spreadsheets/d/1YL6npMl6AtfSYBP1SFjRwKT4QEC3dJrRE4ww5y-Ey3M/edit?gid=1793741515#gid=1793741515" target="_blank" class="btn btn-s" style="text-decoration:none;display:inline-flex;align-items:center;gap:5px;font-size:12px;padding:8px 14px">📄 Sheets</a>
       </div>
     </div>
     <div style="font-size:11px;color:var(--t3);line-height:1.7;margin:8px 0 12px">
@@ -2137,7 +2141,11 @@ let CONFIG = {
 };
 let activeChips = new Set();
 let API_URL = 'https://script.google.com/macros/s/AKfycbzfvY5wAypyFe8OD5Qr-AU-DliVeP4eEVXUjOO1o9N72mgiwc4-t6JdCKs4YrlG69c7/exec';
-const SHEETS_TARGET_URL = 'https://docs.google.com/spreadsheets/d/1sj-aDpw8w6aVI0BN-fPcAN1-PKP4FkQe1jC9tOoeSos/edit?gid=138751902#gid=138751902';
+const SHEETS_URL_TGDD  = 'https://docs.google.com/spreadsheets/d/1YL6npMl6AtfSYBP1SFjRwKT4QEC3dJrRE4ww5y-Ey3M/edit?gid=926424567#gid=926424567';
+const SHEETS_URL_TZ    = 'https://docs.google.com/spreadsheets/d/1YL6npMl6AtfSYBP1SFjRwKT4QEC3dJrRE4ww5y-Ey3M/edit?gid=2000696213#gid=2000696213';
+const SHEETS_URL_SAO   = 'https://docs.google.com/spreadsheets/d/1YL6npMl6AtfSYBP1SFjRwKT4QEC3dJrRE4ww5y-Ey3M/edit?gid=1793741515#gid=1793741515';
+const SHEETS_TARGET_URL = SHEETS_URL_TGDD; // default fallback
+function getSheetsTargetUrl(st){ return st==='Topzone' ? SHEETS_URL_TZ : SHEETS_URL_TGDD; }
 
 function loadState(){
   const saved = LS.get(STORAGE_KEY);
@@ -3235,6 +3243,9 @@ let nhExtraCols = { 'TGDĐ': [], 'Topzone': [] };
 
 function renderSheetSt(){
   const st=document.getElementById('sheet-st-sel').value;
+  // Cập nhật link Sheets theo cửa hàng
+  const lnk=document.getElementById('sheet-st-link');
+  if(lnk) lnk.href=getSheetsTargetUrl(st);
   const nhs=CONFIG[st].nh;
   const wd=getWorkDays();
   if(!CONFIG[st].workDays) CONFIG[st].workDays=wd;
