@@ -1669,9 +1669,11 @@ async function doLogin(){
   const btn = document.getElementById('login-btn');
   if(!pw){ err.textContent='❌ Vui lòng nhập mật khẩu!'; return; }
   
-  // Xác định username: NV nhập MNV hoặc username tùy chỉnh
+  // Xác định username
   const unEl = document.getElementById('login-un');
-  const username = unEl ? unEl.value.trim() : pw; // nếu không có input riêng, dùng MNV = pw (compat)
+  let username = unEl ? unEl.value.trim() : '';
+  // Nếu không nhập username → dùng password làm username (tương thích MNV = password)
+  if(!username) username = pw;
 
   if(btn){ btn.textContent='⏳ Đang kiểm tra...'; btn.disabled=true; }
   err.textContent='';
@@ -1685,21 +1687,21 @@ async function doLogin(){
   // === Gọi Apps Script để xác thực ===
   try {
     const r = await callAPIPublic('login', {
-      username: username || pw,
+      username: username,
       password: pw,
       role: loginRoleMode,
     });
     if(btn){ btn.textContent='🔐 Đăng nhập'; btn.disabled=false; }
 
     if(r && r.ok && r.user && r.token){
-      // Lưu session
+      // Lưu session kèm timestamp để kiểm tra hết hạn 24h
       SESSION_TOKEN  = r.token;
       SESSION_USER_ID= r.user.id;
-      LS.set('bc_session', { token: r.token, userId: r.user.id, role: r.user.role, ts: Date.now() });
+      const sessionData = { token: r.token, userId: r.user.id, role: r.user.role, ts: Date.now() };
+      LS.set('bc_session', sessionData);
 
       if(r.user.role === 'nv'){
         currentNvLogin = r.user.id;
-        // Cache thông tin NV để dùng offline
         NV_ACCOUNTS[r.user.id] = { mk: pw, st: r.user.store, ten: r.user.name };
         LS.set('bc_nv_login', r.user.id);
         LS.set('bc_nv_cache_' + r.user.id, r.user);
@@ -1717,7 +1719,6 @@ async function doLogin(){
     }
   } catch(e) {
     if(btn){ btn.textContent='🔐 Đăng nhập'; btn.disabled=false; }
-    // Sheets không connect → offline fallback
     console.warn('Sheets auth failed, using offline fallback:', e.message);
     _localFallbackLogin(loginRoleMode, username, pw, err, btn);
   }
@@ -1844,12 +1845,23 @@ function doLogout(){
   document.getElementById('login-screen').style.opacity='1';
 }
 
+const SESSION_EXPIRE_MS = 24 * 60 * 60 * 1000; // 24 giờ
+
 function checkAutoLogin(){
-  // Khôi phục session token
+  // Khôi phục session token — chỉ nếu chưa hết 24h
   const sess = LS.get('bc_session');
   if(sess && sess.token && sess.userId){
-    SESSION_TOKEN  = sess.token;
-    SESSION_USER_ID= sess.userId;
+    const age = Date.now() - (sess.ts || 0);
+    if(age < SESSION_EXPIRE_MS){
+      SESSION_TOKEN  = sess.token;
+      SESSION_USER_ID= sess.userId;
+    } else {
+      // Session đã quá 24h → xóa, bắt đăng nhập lại
+      LS.del('bc_session');
+      LS.del('bc_role');
+      LS.del('bc_nv_login');
+      return; // không auto-login
+    }
   }
   const saved = LS.get('bc_role');
   if(saved==='nv'||saved==='ql'){
@@ -1858,7 +1870,6 @@ function checkAutoLogin(){
       if(savedMnv){
         currentNvLogin = savedMnv;
         SESSION_USER_ID = SESSION_USER_ID || savedMnv;
-        // Khôi phục NV_ACCOUNTS cache
         const nvCache = LS.get('bc_nv_cache_' + savedMnv);
         if(nvCache) NV_ACCOUNTS[savedMnv] = { mk: '', st: nvCache.store, ten: nvCache.name };
       }
@@ -1867,6 +1878,19 @@ function checkAutoLogin(){
     }
     enterApp(saved);
   }
+}
+
+// Tự động kiểm tra session hết hạn mỗi phút
+function startSessionWatcher(){
+  setInterval(()=>{
+    const sess = LS.get('bc_session');
+    if(!sess || !sess.ts) return;
+    const age = Date.now() - sess.ts;
+    if(age >= SESSION_EXPIRE_MS && currentRole){
+      showToast('⏰ Phiên đăng nhập đã hết hạn (24h). Vui lòng đăng nhập lại.', 4000);
+      setTimeout(doLogout, 1500);
+    }
+  }, 60 * 1000); // kiểm tra mỗi 1 phút
 }
 
 /* ═══════════════════════════════
@@ -3137,7 +3161,6 @@ async function saveBC(){
   }
   const record={st,mnv,ten:nv.ten,ngay,results,sao_duong:saoDuong,sao_am:saoAm,sao_net:net,note,checklist,ts:Date.now()};
   if(typeof saoOverride==='number') record.sao_override=saoOverride;
-  // Lưu số ngày và trạng thái dùng sao
   record.so_ngay_map = getCurrentSoNgay(st);
   record.dung_sao_map = {...dungSaoState};
   LS.set(`bc:${st}:${mnv}:${ngay}`, record);
@@ -3148,7 +3171,6 @@ async function saveBC(){
     setSyncStatus('err','⚠️ Lưu local OK, Sheets chưa kết nối');
   });
   showToast('✅ Đã lưu thành công! Đang tạo ảnh...');
-  // Re-render lại báo cáo với data vừa lưu để Số Ngày hiển thị đúng
   renderBaoCao(st, nv, mnv, ngay, record.results, record.note||'', record.checklist||'', record.sao_override, record.so_ngay_map||{});
   loadSaoDangCo(st,mnv,ngay);
   const s=document.getElementById('bc-status');
@@ -3994,33 +4016,13 @@ function drawCanvas(st,nv,mnv,ngay,nhs,results, autoSave=false){
     // Kết quả
     c.fillStyle=actual>0?'#111':'#bbb'; c.font=actual>0?'bold 13px sans-serif':'11px sans-serif';
     c.fillText(actual>0?fmt(actual):'—',480,y+22);
-    // Trống — đọc từ soNgayMap (giá trị NV đã chọn), không dùng getTrongCount
-    const iid='inp_'+item.nh.replace(/[^a-z0-9]/gi,'_');
-    const iidKey=iid; // key cho dungSaoState
-    if(isOver){
-      // Đạt ≥100% → 0 ngày (hiện ✓)
-      c.fillStyle='#16a34a'; c.font='bold 10px sans-serif';
-      c.fillText('✓',540,y+21);
-    } else {
-      // Lấy số ngày từ soNgayMap (giá trị đúng NV đã chọn/lưu), fallback về getTrongCount
-      const snVal = typeof soNgayMap[item.nh]==='number' ? soNgayMap[item.nh] : getTrongCount(st,mnv,ngay,item);
-      c.fillStyle='#ef4444'; c.font='bold 10px sans-serif';
-      c.fillText(snVal+' ng',540,y+21);
-    }
-    // Dùng sao — đọc từ dungSaoState (NV có bấm dùng sao không)
-    if(isOver){
-      c.fillStyle='#94a3b8'; c.font='bold 10px sans-serif';
-      c.fillText(sp||'+5⭐',590,y+22);
-    } else {
-      const dungSaoActive = dungSaoState[iidKey] === true;
-      if(dungSaoActive){
-        c.fillStyle='#ef4444'; c.font='bold 10px sans-serif';
-        c.fillText(`-${item.tru}⭐`,590,y+22);
-      } else {
-        c.fillStyle='#94a3b8'; c.font='10px sans-serif';
-        c.fillText('—',590,y+22);
-      }
-    }
+    // Trống
+    const trong=!isOver?getTrongCount(st,mnv,ngay,item):0;
+    c.fillStyle=!isOver?'#ef4444':'#16a34a'; c.font='bold 10px sans-serif';
+    c.fillText(isOver?'✓':trong+' ng',540,y+21);
+    // Dùng sao
+    c.fillStyle=!isOver?'#ef4444':'#94a3b8'; c.font='bold 10px sans-serif';
+    c.fillText(!isOver?`-${item.tru}⭐`:sp||'+5⭐',590,y+22);
     // Separator
     c.fillStyle='#e2e8f0'; c.fillRect(0,y+ROW-1,W,1);
   });
@@ -4216,6 +4218,7 @@ function init(){
   if(API_URL) setSyncStatus('idle','Đã cấu hình — nhấn 🔄 để kiểm tra');
   checkAutoLogin();
   rebuildNav();
+  startSessionWatcher(); // tự động logout sau 24h
   // Polling sao tích lũy mỗi 60 giây — đảm bảo NV luôn nhận sao QL cập nhật
   setInterval(autoSyncSaoTichLuy, 60000);
 }
